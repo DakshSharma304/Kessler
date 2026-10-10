@@ -164,9 +164,12 @@ def test_application_starts_background_load_and_exposes_status(loader, monkeypat
     monkeypatch.setattr(main.settings, "auto_refresh_catalog", True)
     mock_source(monkeypatch, lambda request: httpx.Response(200, content=ACTIVE_PAYLOAD))
     with TestClient(main.app) as client:
-        status = client.post("/api/catalog/refresh").json()
+        # A GET must already see the automatic startup result: a manual POST
+        # would hide a regression where the lifespan never started the loader.
+        status = client.get("/api/catalog/status").json()
         assert status["state"] == "ready"
         assert status["record_count"] == 4
+        assert client.post("/api/catalog/refresh").json()["state"] == "ready"
         page1 = client.get("/api/objects?limit=2&offset=0").json()
         page2 = client.get("/api/objects?limit=2&offset=2").json()
         assert page1["catalog_version"] == page2["catalog_version"]
