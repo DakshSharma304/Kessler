@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+backend/data/*.sqlite3
+backend/data/cache/*
+!backend/data/cache/.gitkeep
+frontend/node_modules/
+frontend/dist/
+frontend/playwright-report/
+frontend/test-results/
+frontend/.playwright/
+*.tsbuildinfo
+.env
+*.log
