@@ -1,6 +1,7 @@
 """Optional ASGI integration for a persistent cloud cache."""
 
 from collections.abc import Awaitable, Callable
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -31,18 +32,26 @@ class PersistRefreshMiddleware:
 
 
 def persist_source_data(app: FastAPI, commit: Commit) -> FastAPI:
+    commit_lock = asyncio.Lock()
+
+    async def serialized_commit() -> None:
+        async with commit_lock:
+            await commit()
+
+    # Background startup loading also needs to publish the persistent Volume.
+    app.state.commit_source_data = serialized_commit
     original_lifespan = app.router.lifespan_context
 
     @asynccontextmanager
     async def lifespan(application: FastAPI):
         async with original_lifespan(application):
             # Preserve the offline fixture initialized during the application's startup.
-            await commit()
+            await serialized_commit()
             try:
                 yield
             finally:
-                await commit()
+                await serialized_commit()
 
     app.router.lifespan_context = lifespan
-    app.add_middleware(PersistRefreshMiddleware, commit=commit)
+    app.add_middleware(PersistRefreshMiddleware, commit=serialized_commit)
     return app

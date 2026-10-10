@@ -53,6 +53,14 @@ You can comma-separate multiple exact frontend origins, including `http://localh
 
 ### Populate live data
 
+GP catalog loading now starts automatically in the backend's background startup
+task, including Modal, with Volume commit after completion. Explore/Data & Methods
+provide a GP-only Refresh/Retry control and policy-aware cache/cooldown. Set
+KESSLER_AUTO_REFRESH_CATALOG=false to explicitly disable startup fetching. This
+does not schedule periodic refreshes or automatically fetch SOCRATES/GCAT. The
+full-source manual request below still exists; safe pre-validation applies to GP,
+not yet to the other adapters. See [loading evidence](CATALOG_LOADING.md).
+
 After deployment, request one refresh and check the returned statuses:
 
 ```bash
@@ -77,6 +85,8 @@ Environment variables:
 - `KESSLER_CACHE_TTL_SOCRATES_SECONDS`: SOCRATES refresh floor, default 39,600.
 - `KESSLER_CORS_ORIGINS`: comma-separated frontend origins.
 - `KESSLER_MAX_TRAJECTORY_SAMPLES`, `KESSLER_MAX_PROPAGATED_OBJECTS`, `KESSLER_MAX_CONCURRENT_JOBS`: compute limits.
+- `KESSLER_AUTO_REFRESH_CATALOG`: initial background GP load (default true).
+- `KESSLER_SOURCE_TIMEOUT_SECONDS`: source timeout (default 30).
 
 `KESSLER_CORS_ORIGINS` is captured by `modal_app.py` from the deployment command's environment. The persistent data directory is set by the Modal image. Do not put Modal tokens in Vite variables or commit account credential files.
 

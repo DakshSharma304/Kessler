@@ -11,7 +11,7 @@ from astropy.utils import iers
 from sgp4.api import Satrec, SatrecArray
 from sgp4.omm import initialize
 
-from app.models import Frame, OrbitalObject, ScienceMetadata, StateVector
+from app.models import Availability, Frame, OrbitalObject, PositionResult, ScienceMetadata, StateVector
 
 iers.conf.auto_download = False
 EARTH_RADIUS_M = 6_378_137.0
@@ -84,3 +84,52 @@ def orbital_summary(state: StateVector) -> dict[str, float]:
     radius = float(np.linalg.norm(state.position_m))
     speed = float(np.linalg.norm(state.velocity_m_s))
     return {"geocentric_radius_m": radius, "approximate_altitude_m": radius - EARTH_RADIUS_M, "speed_m_s": speed}
+
+
+def propagate_objects(objects: list[OrbitalObject], timestamps: list[datetime], frame: Frame) -> list[PositionResult]:
+    """Vectorize SGP4 and time-aware frame conversion for the actual positions API."""
+    if frame not in (Frame.TEME, Frame.ITRS):
+        raise ValueError("SGP4 propagation supports TEME or ITRS output")
+    output = [PositionResult(object_id=obj.catalog_id, states=[]) for obj in objects]
+    satellites, indices = [], []
+    for index, obj in enumerate(objects):
+        try:
+            satellites.append(satrec_from_object(obj))
+            indices.append(index)
+        except (ValueError, KeyError, TypeError) as exc:
+            output[index].errors.append(f"Invalid OMM: {exc}")
+    if not satellites:
+        return output
+    julian = [_julian(timestamp) for timestamp in timestamps]
+    errors, positions, velocities = SatrecArray(satellites).sgp4(
+        np.asarray([item[0] for item in julian]), np.asarray([item[1] for item in julian]),
+    )
+    valid = (errors == 0) & np.all(np.isfinite(positions), axis=2) & np.all(np.isfinite(velocities), axis=2)
+    row_indices, time_indices = np.where(valid)
+    position_m, velocity_m_s = positions[valid] * 1_000, velocities[valid] * 1_000
+    if frame == Frame.ITRS and len(row_indices):
+        times = Time([timestamps[index] for index in time_indices])
+        representation = CartesianRepresentation(
+            positions[valid].T * u.km,
+            differentials=CartesianDifferential(velocities[valid].T * u.km / u.s),
+        )
+        transformed = TEME(representation, obstime=times).transform_to(ITRS(obstime=times))
+        position_m = transformed.cartesian.xyz.to_value(u.m).T
+        velocity_m_s = transformed.cartesian.differentials["s"].d_xyz.to_value(u.m / u.s).T
+    for flat, (row, time_index) in enumerate(zip(row_indices, time_indices)):
+        object_index = indices[row]
+        obj = objects[object_index]
+        archived = "Archived" in obj.source
+        output[object_index].states.append(StateVector(
+            timestamp=timestamps[time_index], frame=frame,
+            position_m=tuple(float(x) for x in position_m[flat]), velocity_m_s=tuple(float(x) for x in velocity_m_s[flat]),
+            metadata=ScienceMetadata(
+                source=obj.source, model="SGP4" + (" + Astropy TEME→ITRS" if frame == Frame.ITRS else ""),
+                model_version="sgp4-2.25/astropy-7.2", availability=Availability.STALE if archived else Availability.AVAILABLE,
+                warnings=["Archived orbital elements; not current tracking data."] if archived else [],
+                assumptions=["IERS data bundled with Astropy"] if frame == Frame.ITRS else [],
+            ),
+        ))
+    for row, time_index in zip(*np.where(~valid)):
+        output[indices[row]].errors.append(f"{timestamps[time_index].isoformat()}: SGP4 error {errors[row, time_index]} or nonfinite state")
+    return output

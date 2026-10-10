@@ -2,7 +2,9 @@
 
 Kessler is a partial research and educational orbital-debris intelligence prototype, **not operational flight software**. It has real SGP4 propagation, two historical NASA probability regressions, a limited dynamic historical maneuver planner, and a budgeted cleanup selection algorithm. The required current-encounter intervention workflow is not yet complete.
 
-Startup currently falls back to one archived Vanguard object; the orbit display is a fixed 90-minute partial path. Avoidance ignores selected current encounters and uses the first historical case; Cleanup uses placeholder proxy inputs. See the [implementation audit](docs/IMPLEMENTATION_AUDIT.md) and [corrected checkpoint evidence](docs/CHECKPOINTS.md) for actual status, remaining defects, and visually inspected screenshots. These defects have not been fixed by the documentation audit.
+The backend now starts a background CelesTrak active-group load automatically. Explore and Data & Methods show loading, catalog coverage, source errors, and a Refresh/Retry control. Fresh data is cached for at least two hours; errors stop automatic retries and retain the previous catalog or explicitly archived Vanguard fallback. The browser loads every catalog page and renders up to 20,000 matching objects with an explicit limit notice. This is active-group coverage, not the full debris catalog.
+
+The orbit display still uses a fixed 90-minute partial path. Avoidance still ignores selected current encounters, and Cleanup still uses placeholder inputs (now explicitly limited to 5,000 candidates). See the [implementation audit](docs/IMPLEMENTATION_AUDIT.md), [checkpoints](docs/CHECKPOINTS.md), and [loading verification](docs/CATALOG_LOADING.md) for evidence and remaining limitations.
 
 ## Quick start
 

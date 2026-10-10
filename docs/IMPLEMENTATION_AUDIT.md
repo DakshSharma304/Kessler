@@ -1,5 +1,21 @@
 # Implementation audit
 
+## Current update: catalog-loading repair
+
+Since the baseline audit below, automatic GP startup/refresh, safe validated GP
+cache promotion, active-group classification, full browser pagination, batch API
+positions, marker filtering, and visible error/cooldown states were repaired.
+One real snapshot of 16,701 objects was loaded and inspected. Source-status badges
+are no longer stretched/clipped. Backend/frontend/browser counts are now 34/5/6.
+See [loading evidence and remaining scope](CATALOG_LOADING.md). The previous 403s
+remain historical; current GP fetching succeeded. SOCRATES/GCAT were not retried.
+
+All sections below are the baseline assessment before that behavioral repair, not
+claims that the repaired loading features remain absent. The overall current-
+encounter intervention workflow and partial-orbit defect remain incomplete.
+
+## Baseline audit
+
 Audited 2026-10-10 UTC against the original KESSLER attachment, source, existing
 tests, running API, and directly inspected screenshots. The attachment supplies
 requirements; the current request covers repair item 1 only, not all implementation

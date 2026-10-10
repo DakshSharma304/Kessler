@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import csv
+import asyncio
 import hashlib
 import io
 import json
 import sqlite3
+import os
+import tempfile
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -35,7 +39,7 @@ def classify_object(name: str, object_type: str | None = None) -> str:
     return "unknown"
 
 
-def parse_gp_json(payload: bytes, *, source: str = "CelesTrak GP") -> tuple[list[OrbitalObject], list[str]]:
+def parse_gp_json(payload: bytes, *, source: str = "CelesTrak GP", active_group: bool = False) -> tuple[list[OrbitalObject], list[str]]:
     raw = json.loads(payload)
     if not isinstance(raw, list):
         raise ValueError("GP JSON must contain a list")
@@ -48,7 +52,8 @@ def parse_gp_json(payload: bytes, *, source: str = "CelesTrak GP") -> tuple[list
                 catalog_id=catalog_id,
                 name=str(record["OBJECT_NAME"]),
                 object_id=record.get("OBJECT_ID"),
-                category=classify_object(str(record["OBJECT_NAME"]), record.get("OBJECT_TYPE")),
+                category=("active" if active_group and classify_object(str(record["OBJECT_NAME"]), record.get("OBJECT_TYPE")) == "unknown"
+                          else classify_object(str(record["OBJECT_NAME"]), record.get("OBJECT_TYPE"))),
                 source=source,
                 elements=OrbitalElements(
                     epoch=_utc(str(record["EPOCH"])),
@@ -65,7 +70,7 @@ def parse_gp_json(payload: bytes, *, source: str = "CelesTrak GP") -> tuple[list
             current = objects.get(catalog_id)
             if current is None or obj.elements.epoch > current.elements.epoch:
                 objects[catalog_id] = obj
-        except (KeyError, TypeError, ValueError) as exc:
+        except (KeyError, TypeError, ValueError, AttributeError) as exc:
             errors.append(f"row {index}: {exc}")
     return list(objects.values()), errors
 
@@ -146,6 +151,20 @@ class CatalogStore:
                 [(o.catalog_id, o.name, o.category, o.elements.epoch.isoformat(), json.dumps(o.elements.raw_omm), o.model_dump_json()) for o in objects],
             )
 
+    def replace_objects(self, objects: list[OrbitalObject]) -> None:
+        """Replace the owned catalog snapshot only after a nonempty payload is validated."""
+        if not objects:
+            raise ValueError("Refusing to replace a catalog with no valid objects")
+        with self.connection:
+            self.connection.execute("DELETE FROM objects")
+            self.connection.executemany(
+                "INSERT INTO objects VALUES(?,?,?,?,?,?)",
+                [(o.catalog_id, o.name, o.category, o.elements.epoch.isoformat(), json.dumps(o.elements.raw_omm), o.model_dump_json()) for o in objects],
+            )
+
+    def categories(self) -> dict[str, int]:
+        return dict(self.connection.execute("SELECT category, COUNT(*) FROM objects GROUP BY category").fetchall())
+
     def upsert_encounters(self, encounters: list[Conjunction]) -> None:
         with self.connection:
             self.connection.executemany(
@@ -185,6 +204,17 @@ class CatalogStore:
         row = self.connection.execute("SELECT object_json FROM objects WHERE catalog_id=?", (catalog_id,)).fetchone()
         return OrbitalObject.model_validate_json(row[0]) if row else None
 
+    def objects_by_ids(self, object_ids: list[str]) -> dict[str, OrbitalObject]:
+        result = {}
+        for start in range(0, len(object_ids), 900):
+            batch = object_ids[start:start + 900]
+            placeholders = ",".join("?" for _ in batch)
+            rows = self.connection.execute(f"SELECT object_json FROM objects WHERE catalog_id IN ({placeholders})", batch)
+            for row in rows:
+                obj = OrbitalObject.model_validate_json(row[0])
+                result[obj.catalog_id] = obj
+        return result
+
     def encounter(self, encounter_id: str) -> Conjunction | None:
         row = self.connection.execute("SELECT encounter_json FROM encounters WHERE encounter_id=?", (encounter_id,)).fetchone()
         return Conjunction.model_validate_json(row[0]) if row else None
@@ -201,37 +231,72 @@ class CatalogStore:
 
 
 class SourceCache:
-    def __init__(self, directory: Path, store: CatalogStore):
+    def __init__(self, directory: Path, store: CatalogStore, timeout_seconds: float = 30):
         self.directory = directory
         self.directory.mkdir(parents=True, exist_ok=True)
         self.store = store
+        self.timeout_seconds = timeout_seconds
+        self._locks: dict[str, asyncio.Lock] = {}
 
-    async def fetch(self, name: str, url: str, ttl_seconds: int, suffix: str) -> tuple[bytes | None, DatasetStatus]:
+    def promote(self, name: str, url: str, suffix: str, payload: bytes, metadata: dict) -> DatasetStatus:
+        """Atomically publish already validated bytes; caller must supply validation metadata."""
+        with tempfile.NamedTemporaryFile(dir=self.directory, delete=False) as temporary:
+            temporary.write(payload)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+            temporary_path = Path(temporary.name)
+        try:
+            temporary_path.replace(self.directory / f"{name}.{suffix}")
+        finally:
+            temporary_path.unlink(missing_ok=True)
+        now = datetime.now(UTC)
+        status = DatasetStatus(
+            name=name, source_url=url, availability=Availability.AVAILABLE,
+            retrieved_at=now, last_attempt_at=now,
+            checksum_sha256=hashlib.sha256(payload).hexdigest(),
+            **metadata,
+        )
+        self.store.set_dataset(status)
+        return status
+
+    async def fetch(self, name: str, url: str, ttl_seconds: int, suffix: str, *,
+                    validate: Callable[[bytes], dict] | None = None, automatic: bool = False) -> tuple[bytes | None, DatasetStatus]:
+        async with self._locks.setdefault(name, asyncio.Lock()):
+            return await self._fetch(name, url, ttl_seconds, suffix, validate, automatic)
+
+    async def _fetch(self, name: str, url: str, ttl_seconds: int, suffix: str,
+                     validate: Callable[[bytes], dict] | None, automatic: bool) -> tuple[bytes | None, DatasetStatus]:
         data_path = self.directory / f"{name}.{suffix}"
         existing = next((item for item in self.store.dataset_statuses() if item.name == name), None)
-        if data_path.exists() and existing and existing.retrieved_at:
-            if datetime.now(UTC) - existing.retrieved_at < timedelta(seconds=ttl_seconds):
-                return data_path.read_bytes(), existing
+        now = datetime.now(UTC)
+        cached = data_path.read_bytes() if data_path.exists() else None
+        if existing and ((existing.next_retry_at and now < existing.next_retry_at) or
+                         (automatic and existing.error and existing.last_attempt_at)):
+            return cached, existing
+        if cached is not None and existing and existing.retrieved_at and now - existing.retrieved_at < timedelta(seconds=ttl_seconds):
+            return cached, existing
         try:
-            async with httpx.AsyncClient(follow_redirects=True, timeout=30, headers={"User-Agent": "Kessler/0.1 educational-research"}) as client:
+            async with httpx.AsyncClient(follow_redirects=False, timeout=self.timeout_seconds, headers={"User-Agent": "Kessler/0.1 educational-research"}) as client:
                 response = await client.get(url)
-                response.raise_for_status()
+                if response.status_code != 200:
+                    raise ValueError(f"Source returned HTTP {response.status_code}; automatic retries stopped. Check source access before retrying.")
             payload = response.content
-            checksum = hashlib.sha256(payload).hexdigest()
-            data_path.write_bytes(payload)
-            status = DatasetStatus(
-                name=name, source_url=url, availability=Availability.AVAILABLE,
-                retrieved_at=datetime.now(UTC), checksum_sha256=checksum,
-                parsing_status="downloaded", record_count=0,
-            )
+            metadata = validate(payload) if validate else {"parsing_status": "downloaded", "record_count": 0}
+            status = self.promote(name, url, suffix, payload, metadata)
         except Exception as exc:
-            if data_path.exists():
-                payload = data_path.read_bytes()
+            retry_at = now + timedelta(seconds=ttl_seconds)
+            if cached is not None:
+                payload = cached
                 status = (existing or DatasetStatus(name=name, source_url=url, availability=Availability.STALE)).model_copy(
-                    update={"availability": Availability.STALE, "stale": True, "error": str(exc)}
+                    update={"availability": Availability.STALE, "stale": True, "error": str(exc), "last_attempt_at": now, "next_retry_at": retry_at}
                 )
             else:
                 payload = None
-                status = DatasetStatus(name=name, source_url=url, availability=Availability.UNAVAILABLE, error=str(exc), parsing_status="download_failed")
+                status = (existing or DatasetStatus(name=name, source_url=url, availability=Availability.UNAVAILABLE)).model_copy(update={
+                    "availability": Availability.STALE if existing and existing.record_count else Availability.UNAVAILABLE,
+                    "stale": bool(existing and existing.record_count), "error": str(exc),
+                    "last_attempt_at": now, "next_retry_at": retry_at,
+                    "parsing_status": existing.parsing_status if existing and existing.record_count else "download_failed",
+                })
         self.store.set_dataset(status)
         return payload, status

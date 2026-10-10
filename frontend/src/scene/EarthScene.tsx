@@ -16,7 +16,7 @@ function CatalogPoints({ states }: { states: StateVector[] }) {
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>
-      <pointsMaterial color="#79dcff" size={0.035} sizeAttenuation />
+      <pointsMaterial color="#79dcff" size={states.length > 1000 ? 0.008 : 0.035} sizeAttenuation />
     </points>
   )
 }

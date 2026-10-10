@@ -1,5 +1,25 @@
 # Checkpoint log
 
+## Catalog-loading repair — 2026-10-10 UTC (after the audit below)
+
+- Automatic background GP loading, coordinated refresh/status endpoints, policy-aware
+  validated GP caching, snapshot replacement, visible retry/fallback, full browser
+  pagination, and batched positions API are implemented and tested.
+- One real HTTP-200 active-group download yielded 16,701 objects. The same download
+  was reused for runtime startup/refresh; all 16,701 ITRS states returned without
+  propagation errors in the direct browser inspection. Screenshots were opened and
+  visually inspected; six-digit ID search, selection, and cached refresh worked.
+- Backend: **34 passed** in 2.11 s; frontend: **5 passed** (1.33 s runner duration);
+  browser: **6 passed** in 12.9 s; production build passed (Vite 6.28 s). Third-party warning and
+  large-chunk limitations remain. Browser tests distinguish mocked loading states
+  from the separate real-catalog inspection.
+- Scope remains active-group loading, not complete debris ingestion or all original
+  stage acceptance. Orbit coverage, current encounter workflow, optimizer defects,
+  GCAT joins, secondary screening, and scientific Cleanup inputs remain unfinished.
+- Details, provenance, commands, visual evidence, and local checks:
+  [CATALOG_LOADING.md](CATALOG_LOADING.md). The section below records the earlier
+  documentation-only audit and its earlier test counts; it is historical evidence.
+
 ## Audit correction — 2026-10-10 UTC
 
 This log supersedes the original completion claims. Kessler is a partial prototype,
@@ -26,7 +46,7 @@ No captured page exceptions or console warnings during visual inspection. A cons
 resource 404 was recorded; `/favicon.ico` independently returned 404. Do not claim a
 clean browser console. The E2E runner also emitted a NO_COLOR/FORCE_COLOR warning.
 
-## Corrected stage status
+## Baseline stage status before the catalog-loading repair
 
 ### Stage 0 — setup: implemented and tested for this cloud checkout
 
@@ -129,7 +149,7 @@ Previous SDK import was local only. No remote image build/deployment/hosted smok
 test performed; credentials are not configured here. Docker fixture layout has a
 known mismatch with PROJECT_ROOT, independent of credentials. Jobs are in memory.
 
-## Next executable task
+## Next task recorded at the baseline audit
 
 Repair catalog loading/coverage (repair-list item 2), then snapshots (item 3).
 Verify documented queries, parser fixtures, counts/categories, participant records,

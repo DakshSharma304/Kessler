@@ -1,5 +1,16 @@
 # Data sources
 
+## Catalog-loading update
+
+GP now automatically loads on backend startup; manual refresh has a visible UI.
+The GP cache validates before atomic promotion and preserves valid snapshots on
+failure. Pagination/batch positions and active-group classification are connected.
+One real request succeeded with 16,701 objects; prior GP 403s are historical, not a
+current universal blocker. No new SOCRATES/GCAT request was made. Their adapters
+still do not validate bytes before caching/join physical metadata. See
+[current provenance/evidence](CATALOG_LOADING.md). The notes below describe the
+pre-repair baseline and its historical fixture fallback.
+
 - CelesTrak GP OMM: public orbital elements; approximately two-hour refresh target.
 - CelesTrak SOCRATES Plus: published conjunction screening; approximately 10–11-hour refresh target.
 - NASA CARA Analysis Tools: historical CDM validation fixtures only.

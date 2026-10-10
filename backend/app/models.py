@@ -86,6 +86,18 @@ class DatasetStatus(BaseModel):
     parsing_status: str = "not_loaded"
     error: str | None = None
     stale: bool = False
+    last_attempt_at: datetime | None = None
+    next_retry_at: datetime | None = None
+
+
+class CatalogLoadingStatus(BaseModel):
+    state: Literal["idle", "loading", "ready", "degraded", "failed"]
+    record_count: int
+    catalog_version: str
+    coverage: str = "CelesTrak active group only; not the complete public catalog."
+    categories: dict[str, int]
+    source: DatasetStatus | None
+    error: str | None = None
 
 
 class Conjunction(BaseModel):

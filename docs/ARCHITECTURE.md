@@ -1,5 +1,13 @@
 # Architecture
 
+Current loading update: app.catalog coordinates background initial GP loading,
+status, and explicit refresh. GP payloads are validated before atomic cache
+promotion, then replace the SQLite snapshot. The positions API now calls batched
+SGP4/ITRS; the UI retrieves all pages, refreshes by catalog checksum, filters markers,
+and reports coverage/errors. The module assessment below is the earlier baseline;
+its loading/API/filtering gaps have been repaired. Other gaps remain. See
+[the loading implementation](CATALOG_LOADING.md).
+
 Kessler has a FastAPI backend and React/Vite frontend. Intended design: source
 ingestion/science in backend, visualization in frontend. Current implementation is
 partial: Cleanup constructs arbitrary proxy inputs in frontend, animation lacks

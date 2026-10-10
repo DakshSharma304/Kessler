@@ -1,7 +1,26 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+import asyncio
+import pytest
 
 from app.deployment import persist_source_data
+
+
+@pytest.mark.asyncio
+async def test_background_and_request_commits_are_serialized() -> None:
+    active = 0
+    maximum = 0
+
+    async def commit():
+        nonlocal active, maximum
+        active += 1
+        maximum = max(maximum, active)
+        await asyncio.sleep(.01)
+        active -= 1
+
+    app = persist_source_data(FastAPI(), commit)
+    await asyncio.gather(*(app.state.commit_source_data() for _ in range(3)))
+    assert maximum == 1
 
 
 def test_volume_commit_happens_after_refresh_and_on_lifecycle_boundaries() -> None:

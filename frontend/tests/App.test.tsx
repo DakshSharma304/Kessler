@@ -6,7 +6,9 @@ import App from '../src/App'
 test('renders service status from the backend', async () => {
   vi.stubGlobal('fetch', vi.fn().mockImplementation(async (url: string) => ({
     ok: true,
-    json: async () => url.includes('/api/objects')
+    json: async () => url.includes('/api/catalog/status')
+      ? { state: 'failed', record_count: 0, catalog_version: 'empty', coverage: 'Test coverage', categories: {} }
+      : url.includes('/api/objects')
       ? { items: [], total: 0, limit: 1000, offset: 0 }
       : { status: 'ok', version: '0.1.0', datasets: { objects: 0, encounters: 0 } },
   })))

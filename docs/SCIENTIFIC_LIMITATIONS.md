@@ -1,5 +1,12 @@
 # Scientific limitations
 
+Loading update: current GP fetching succeeded for 16,701 active-group objects;
+automatic loading/cache/UI pagination and batch API are repaired. The old one-object
+cloud condition below is baseline evidence, not the present catalog state. No new
+SOCRATES/GCAT fetch occurred. Full debris coverage, element-age applicability,
+partial orbit display, current encounters, and scientific planner limitations remain.
+See [CATALOG_LOADING.md](CATALOG_LOADING.md).
+
 Kessler is a partial research/educational prototype, not operational flight software.
 Scientific routines and product workflows must be evaluated separately. See
 [the evidence-backed audit](IMPLEMENTATION_AUDIT.md).

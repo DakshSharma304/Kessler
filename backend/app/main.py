@@ -13,22 +13,24 @@ from fastapi.responses import JSONResponse
 
 from app import __version__
 from app.cleanup import optimize_cleanup
+from app.catalog import CatalogLoader
 from app.config import get_settings
 from app.data import GCAT_URL, GP_URL, SOCRATES_URL, CatalogStore, SourceCache, parse_gcat_tsv, parse_gp_json, parse_socrates_csv
 from app.jobs import JobManager
 from app.maneuvers import optimize_maneuvers, simulate_maneuver
 from app.models import (
-    Availability, CleanupOptimizeRequest, DatasetStatus, EncounterAnalysis,
+    Availability, CatalogLoadingStatus, CleanupOptimizeRequest, DatasetStatus, EncounterAnalysis,
     EncounterAnalyzeRequest, Frame, ManeuverOptimizeRequest,
     ManeuverSimulationRequest, PositionRequest, PositionResult, ScienceMetadata,
     TrajectoryRequest,
 )
-from app.orbital import propagate_object
+from app.orbital import propagate_object, propagate_objects
 from app.risk import calculate_cdm_probability, parse_cdm
 
 settings = get_settings()
 store = CatalogStore(settings.data_dir / "kessler.sqlite3")
-source_cache = SourceCache(settings.data_dir / "cache", store)
+source_cache = SourceCache(settings.data_dir / "cache", store, settings.source_timeout_seconds)
+catalog_loader = CatalogLoader(store, source_cache, max(7_200, settings.cache_ttl_gp_seconds))
 jobs = JobManager(settings.max_concurrent_jobs)
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_ROOT = PROJECT_ROOT / "data" / "fixtures"
@@ -63,11 +65,17 @@ def load_archived_fixture_if_empty() -> None:
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(application: FastAPI):
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     (settings.data_dir / "cache").mkdir(parents=True, exist_ok=True)
     load_archived_fixture_if_empty()
-    yield
+    catalog_loader.persist = getattr(application.state, "commit_source_data", None)
+    if settings.auto_refresh_catalog:
+        catalog_loader.start(automatic=True)
+    try:
+        yield
+    finally:
+        await catalog_loader.close()
 
 
 app = FastAPI(
@@ -102,34 +110,35 @@ async def health() -> dict:
         "timestamp": datetime.now(UTC).isoformat(),
         "datasets": {"objects": store.count("objects"), "encounters": store.count("encounters")},
         "source_freshness": [item.model_dump(mode="json") for item in store.dataset_statuses()],
+        "catalog_loading": catalog_loader.status(),
     }
 
 
 @app.get("/api/data/status", tags=["data"])
 async def data_status() -> list[DatasetStatus]:
-    return store.dataset_statuses()
+    return [catalog_loader.status().source if item.name == "gp" else item for item in store.dataset_statuses()]
+
+
+@app.get("/api/catalog/status", response_model=CatalogLoadingStatus, tags=["data"])
+async def catalog_status() -> CatalogLoadingStatus:
+    return catalog_loader.status()
+
+
+@app.post("/api/catalog/refresh", response_model=CatalogLoadingStatus, tags=["data"])
+async def refresh_catalog() -> CatalogLoadingStatus:
+    result = await catalog_loader.refresh()
+    if result.error:
+        raise HTTPException(503, f"Catalog load could not finish: {result.error}")
+    return result
 
 
 @app.post("/api/data/refresh", tags=["data"])
 async def refresh_data() -> dict:
     results: dict[str, dict] = {}
-    gp_payload, gp_status = await source_cache.fetch("gp", GP_URL, settings.cache_ttl_gp_seconds, "json")
-    if gp_payload:
-        try:
-            objects, errors = parse_gp_json(gp_payload)
-            store.upsert_objects(objects)
-            gp_status = gp_status.model_copy(update={"record_count": len(objects), "parsing_status": "parsed", "error": "; ".join(errors[:5]) or gp_status.error})
-            store.set_dataset(gp_status)
-        except Exception as exc:
-            gp_status = gp_status.model_copy(update={"parsing_status": "parse_failed", "error": str(exc)})
-            store.set_dataset(gp_status)
-    elif store.count("objects"):
-        gp_status = gp_status.model_copy(update={
-            "availability": Availability.STALE, "stale": True,
-            "record_count": store.count("objects"), "parsing_status": "archived_fixture",
-            "error": f"Live refresh failed ({gp_status.error}); archived real-data fixture remains loaded.",
-        })
-        store.set_dataset(gp_status)
+    loaded = await catalog_loader.refresh()
+    if loaded.error:
+        raise HTTPException(503, f"Catalog load could not finish: {loaded.error}")
+    gp_status = loaded.source
     results["gp"] = gp_status.model_dump(mode="json")
 
     soc_payload, soc_status = await source_cache.fetch("socrates", SOCRATES_URL, settings.cache_ttl_socrates_seconds, "csv")
@@ -160,7 +169,9 @@ async def refresh_data() -> dict:
 
 @app.get("/api/objects", tags=["catalog"])
 async def list_objects(search: str = "", category: str | None = None, limit: int = Query(100, ge=1, le=1_000), offset: int = Query(0, ge=0)) -> dict:
-    return {"items": store.objects(search, category, limit, offset), "total": store.count("objects"), "limit": limit, "offset": offset}
+    return {"items": [obj.model_dump(exclude={"elements": {"raw_omm"}}) for obj in store.objects(search, category, limit, offset)],
+            "total": store.count("objects"), "limit": limit, "offset": offset,
+            "catalog_version": catalog_loader.status().catalog_version}
 
 
 @app.get("/api/objects/{catalog_id}", tags=["catalog"])
@@ -175,15 +186,12 @@ async def get_object(catalog_id: str):
 async def positions(request: PositionRequest) -> list[PositionResult]:
     if len(request.object_ids) > settings.max_propagated_objects:
         raise HTTPException(413, "Too many objects requested")
-    output = []
-    for object_id in request.object_ids:
-        obj = store.object(object_id)
-        if not obj:
-            output.append(PositionResult(object_id=object_id, states=[], errors=["Object unavailable in loaded catalog coverage"]))
-            continue
-        states, errors = propagate_object(obj, request.timestamps, request.frame)
-        output.append(PositionResult(object_id=object_id, states=states, errors=errors))
-    return output
+    if len(request.object_ids) * len(request.timestamps) > 100_000:
+        raise HTTPException(413, "Object/timestamp product exceeds 100,000 states")
+    loaded = store.objects_by_ids(request.object_ids)
+    results = await asyncio.to_thread(propagate_objects, list(loaded.values()), request.timestamps, request.frame)
+    by_id = {item.object_id: item for item in results}
+    return [by_id.get(object_id, PositionResult(object_id=object_id, states=[], errors=["Object unavailable in loaded catalog coverage"])) for object_id in request.object_ids]
 
 
 @app.post("/api/trajectories", tags=["orbital"])

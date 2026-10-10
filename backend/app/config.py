@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     max_trajectory_samples: int = Field(1_000, ge=10, le=10_000)
     max_propagated_objects: int = Field(20_000, ge=1, le=100_000)
     max_concurrent_jobs: int = Field(2, ge=1, le=8)
+    auto_refresh_catalog: bool = True
+    source_timeout_seconds: float = Field(30, gt=0, le=120)
 
     @property
     def cors_origin_list(self) -> list[str]:

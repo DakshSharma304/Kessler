@@ -52,6 +52,11 @@ dt { color: #70828e; font: .64rem 'DM Mono'; } dd { margin: 0; text-align: right
 .fine-print { color: #74858f; font-size: .72rem; line-height: 1.55; }
 .solution { display: grid; grid-template-columns: 1.3fr repeat(3, 1fr) auto; gap: 12px; align-items: center; border-top: 1px solid #21313a; padding: 14px 0; font: .75rem 'DM Mono'; }.solution small { grid-column: 1 / -1; color: #74858f; }
 .notice { padding: 12px; border-radius: 9px; background: #18242b; font-size: .8rem; }.notice.error { color: #ffaaaa; background: #321919; }
+.catalog-loading { padding: 12px; border: 1px solid #304550; border-radius: 9px; background: #10202a; font-size: .8rem; margin-bottom: 12px; }
+.catalog-loading p { margin: 7px 0; line-height: 1.45; }.catalog-loading small { display: block; color: #91a2ad; overflow-wrap: anywhere; }
+.catalog-loading button { margin-top: 10px; padding: 7px 10px; border: 1px solid #52788a; border-radius: 7px; background: #19303e; cursor: pointer; }.catalog-loading button:disabled { opacity: .5; cursor: default; }
+.catalog-error { color: #ffaaaa; overflow-wrap: anywhere; }
+.source-row { align-items: flex-start; }.source-row > .status-pill { flex-shrink: 0; }
 .method-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }.panel { margin: 0; }.panel ul { padding-left: 20px; color: #94a5ae; line-height: 1.6; }
 .source-row { display: flex; gap: 12px; padding: 13px 0; border-top: 1px solid #203039; }.source-row > div { min-width: 0; }.source-row a { display: block; color: #76c9e6; font-size: .7rem; margin-top: 7px; }
 .method { border-top: 1px solid #203039; padding: 13px 0; }.method p { color: #93a4ad; font-size: .8rem; }.method small { color: #667984; }
