@@ -1,6 +1,8 @@
 # Kessler
 
-Kessler is a research and educational orbital-debris intelligence prototype. It ingests public orbital data, propagates catalog objects with SGP4, presents current conjunction screening information, and evaluates hypothetical avoidance and cleanup decisions. It is **not operational flight software**.
+Kessler is a partial research and educational orbital-debris intelligence prototype, **not operational flight software**. It has real SGP4 propagation, two historical NASA probability regressions, a limited dynamic historical maneuver planner, and a budgeted cleanup selection algorithm. The required current-encounter intervention workflow is not yet complete.
+
+Startup currently falls back to one archived Vanguard object; the orbit display is a fixed 90-minute partial path. Avoidance ignores selected current encounters and uses the first historical case; Cleanup uses placeholder proxy inputs. See the [implementation audit](docs/IMPLEMENTATION_AUDIT.md) and [corrected checkpoint evidence](docs/CHECKPOINTS.md) for actual status, remaining defects, and visually inspected screenshots. These defects have not been fixed by the documentation audit.
 
 ## Quick start
 

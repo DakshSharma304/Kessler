@@ -68,7 +68,7 @@ The function uses two CPU cores and 2 GiB of memory, permits at most one active 
 
 The endpoint is public. The current prototype has no user authentication; do not share it as an unrestricted production service. Deploying and using Modal consumes resources under your account's plan. No deployment was performed by the agent because no Modal account credentials were configured here.
 
-The backend remains a standard ASGI application (`app.main:app`). `backend/Dockerfile` is an optional portable container configuration; Modal uses the image declaration in `modal_app.py` directly.
+The backend remains a standard ASGI application (`app.main:app`). `backend/Dockerfile` is optional and unverified; Modal uses `modal_app.py` directly. Docker currently places fixtures under `/app/data/fixtures`, but `main.py` computes `/data/fixtures` in that layout. Offline startup/reference routes need a layout fix before this Docker configuration can be called ready.
 
 Environment variables:
 
@@ -84,4 +84,4 @@ Environment variables:
 
 `frontend/vercel.json` configures a Vite build and SPA routing. Set `VITE_API_URL` at build time to the public HTTPS backend origin, and add the Vercel origin to `KESSLER_CORS_ORIGINS`.
 
-Modal SDK and local ASGI/persistence tests have been run. Remote image building, deployment, and the actual hosted endpoint must be verified after account setup. Local tests alone do not establish a successful Modal deployment.
+The SDK definition was previously imported locally. Persistence tests use a mocked commit, not a real Modal Volume or hosted endpoint. Remote building/deployment/smoke checks remain unrun. Playwright assumes `/usr/bin/chromium` and POSIX `.venv/bin`, so its commands are not portable to every user's IDE. Configuration presence/local tests do not establish deployment or application readiness. See [the implementation audit](IMPLEMENTATION_AUDIT.md).

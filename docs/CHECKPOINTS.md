@@ -1,102 +1,137 @@
 # Checkpoint log
 
-Recorded from commands actually run on 2026-10-10 UTC.
+## Audit correction — 2026-10-10 UTC
 
-## Stage 0 — repository and setup: complete
+This log supersedes the original completion claims. Kessler is a partial prototype,
+not a completed execution of the original stages 0–12. Passing existing tests does
+not establish that every requirement of a stage works.
 
-- Detected Python 3.12.14 and Node 24.19.0; installed pinned backend dependencies into `.venv` and 223 npm packages.
-- Backend, Vite, HTTP health, pytest, Vitest, and TypeScript production build all ran successfully.
-- npm's unwritable default cache was corrected with a writable cache without disabling TLS or integrity checks.
+This repair changes documentation and visual evidence only. No application,
+dependency, test, or deployment behavior was changed. The single-object fallback,
+partial orbit, historical-only planner, and other defects remain. See
+[the feature audit](IMPLEMENTATION_AUDIT.md).
 
-## Stage 1 — shared models and API foundation: complete
+## Checks rerun for this correction
 
-- Added UTC-aware typed scientific models, SI units, explicit frames, provenance, settings, CORS, structured validation errors, OpenAPI, frontend API client, persistent selection, and five-section navigation.
-- Validation tests reject naive timestamps and invalid windows. API/OpenAPI and frontend shell tests pass.
+| Check | Command / working directory | Actual result | Evidence boundary |
+| --- | --- | --- | --- |
+| Backend | `../.venv/bin/python -m pytest -q` / `backend` | 21 passed in 1.36 s; one Starlette/AnyIO deprecation warning | Existing cases only, not all stage acceptance tests |
+| Frontend unit | `npm test -- --run` / `frontend` | 1 passed; 1.60 s runner duration | Mocked shell/status, not real API or WebGL validation |
+| TypeScript/production build | `npm run build` / `frontend` | Passed; Vite build 5.21 s | Compile/build only; Explore chunk 917.68 kB, >500 kB warning |
+| Browser smoke | `npm run test:e2e -- --reporter=line` / `frontend` | 4 passed in 10.3 s | Archived-object shell, empty encounters/methods, historical optimizer, placeholder-input cleanup |
+| Runtime API | GET `/api/health` and `/api/data/status` | Healthy; 1 object, 0 encounters; GP archived/stale, SOCRATES/GCAT unavailable | Current cloud runtime; stored previous 403 errors, not new upstream probes |
+| Visual inspection | Chromium/Playwright, 1440×1000, software WebGL | Six screenshots opened and inspected; active WebGL; camera drag, orbit toggle, search-empty state, navigation, both planners exercised | Desktop archived workflow only; not mobile/full catalog/hosted deployment |
 
-## Stage 2 — real-data ingestion: implemented but externally limited
+No captured page exceptions or console warnings during visual inspection. A console
+resource 404 was recorded; `/favicon.ico` independently returned 404. Do not claim a
+clean browser console. The E2E runner also emitted a NO_COLOR/FORCE_COLOR warning.
 
-- Added GP OMM, SOCRATES CSV, and GCAT TSV adapters; SHA-256/status cache metadata; TTLs; last-known-good behavior; deduplication; SQLite persistence; and two-participant encounter indexes.
-- Live requests to all three official sources returned HTTP 403, including direct approved retries. Counts are not fabricated.
-- Archived real Vanguard 1 OMM is loaded and explicitly marked stale; current encounters remain empty with correct coverage wording.
+## Corrected stage status
 
-## Stage 3 — SGP4 and globe: complete for loaded coverage
+### Stage 0 — setup: implemented and tested for this cloud checkout
 
-- Actual `sgp4` OMM propagation, vectorized `SatrecArray`, Astropy TEME→ITRS conversion, trajectory API, and React Three Fiber Earth/GPU points/orbit controls are implemented.
-- Determinism, finite values, SI scale, and monotonic trajectory timestamps pass.
-- Benchmarks: 100 / 1,000 / 10,000 propagators in 0.00210 / 0.01450 / 0.21798 s; zero errors.
+Dependencies are installed, existing API/Vite services respond, and the checks
+above run. Not verification of a fresh clone on every supported OS.
 
-## Stage 4 — current close approaches: implemented but no live dataset
+### Stage 1 — models/API foundation: limited; incomplete
 
-- Indexed lookup, filtering/pagination, SOCRATES external metric labeling, encounter view, empty coverage state, and current-element analysis path are implemented.
-- Parser/unit/index tests pass. Live SOCRATES data is unavailable due HTTP 403, so current encounter refinement cannot be demonstrated truthfully.
+Test evidence: state-vector timezone rejection, one invalid trajectory-window
+request, structured validation, health/OpenAPI, and shell. Complete typed responses,
+scientific metadata, finite-value validation, timezone checks on all request fields,
+and frontend structured-error handling are incomplete.
 
-## Stage 5 — collision probability: complete for historical validation
+### Stage 2 — ingestion: incomplete, with external access limitations
 
-- Implemented CCSDS CDM parser, separate RTN bases, covariance rotation/combination, encounter plane, conditioning validation, and numerical 2D Gaussian hard-body integration.
-- Terra / Iridium-33 debris: calculated `0.02117381156`, published `0.02117`.
-- Terra / SL-16 debris: calculated `0.0001082494810`, published `0.0001082`.
-- Invalid covariance fails safely; ordinary encounters without covariance return unavailable unless an assumption is explicit.
+Real OMM fixture parsing and synthetic SOCRATES unit conversion/two-participant
+lookup are tested. The test named “parses_and_deduplicates” uses one record and
+does not exercise duplicates. No GCAT parser/join, source-cache recovery, or
+restart-persistence test exists in the current suite.
 
-## Stage 6 — dynamic maneuver simulation: complete with documented force-model limits
+Active-only GP coverage, incomplete classification/physical joins, pre-validation
+cache writes, and retained old snapshots are code limitations independent of 403.
+Previous official-source requests in this cloud returned 403, blocking live
+demonstration here; local/Modal access is unknown, not proven blocked.
 
-- Added DOP853 Earth-gravity + J2 propagation, RTN impulses, backward burn timing, forward propagation, and bounded closest-approach refinement.
-- Tests verify zero-delta-v baseline reproduction and distinguish positive/negative along-track interventions.
+### Stage 3 — propagation/globe: limited; incomplete
 
-## Stage 7 — maneuver optimization: complete for nominal-clearance objective
+Real SGP4, OMM, TEME-to-ITRS code, GPU points, and orbit controls exist. Tests cover
+finite/deterministic TEME output, SI scale, and two ordered timestamps, not frame
+roundtrips or full orbit coverage. Visual inspection confirms Earth, a marker after
+rotation, camera movement, and a partial orbit. UI requests 90 minutes, not the
+object's period. API batching and catalog-scale animation are not integrated.
 
-- Dynamic timing/direction/magnitude candidates, hard constraints, numerical refinement, nondominated selection, bounded asynchronous jobs, progress/status, and frontend polling are integrated.
-- Fresh 18-candidate historical-state run completed in 1.54 s with three nondominated solutions.
-- Probability optimization remains unavailable because maneuver covariance propagation is not implemented; UI states this explicitly.
+### Stage 4 — current encounters: incomplete
 
-## Stage 8 — targeted secondary screening: implemented but not applied to historical UI case
+Both participant indexes are tested using synthetic CSV; empty wording is
+browser-tested. Time/search filters, details, trajectory integration, and local
+numerical TCA refinement are missing. Analysis samples reported TCA and ignores
+refinement_window_seconds. No real SOCRATES schema/current encounter flow verified.
 
-- Piecewise relative-trajectory segments use analytic segment minima instead of endpoint-only checks.
-- Synthetic between-sample collision and distant-object rejection tests pass.
-- Historical NASA cases are correctly not mixed with today's catalog; interactive results are labeled `UNSCREENED`.
+### Stage 5 — probability: historical core tested; generic integration incomplete
 
-## Stage 9 — decay and cleanup: implemented with proxy limits
+Two NASA fixture integrals match published values at relative tolerance 7e-4:
+approximately 0.02117381156 and 0.0001082494810. RTN orthonormality and one invalid
+covariance are tested. Independent NASA numerical reference, generic CDM frames/
+units, conditioning, and UI risk workflows remain incomplete/unverified. The
+current-encounter assumed-Pc branch uses XY instead of the encounter plane.
 
-- Added bounded low/nominal/high drag persistence bands with unavailable states for missing mass/area.
-- Added deterministic budgeted marginal-benefit cleanup optimization and shared-edge deduplication.
-- Budget response, priority machinery, missing-input, scenario sensitivity, and edge double-counting tests pass.
+### Stage 6 — maneuver simulation: limited; incomplete
 
-## Stage 10 — frontend integration: complete for available data
+DOP853 gravity+J2, RTN impulses, and modified-trajectory minimization exist. One
+synthetic case checks zero-impulse separation within 1 m and distinct signed
+along-track outcomes. Generic epoch/frame validity, convergence, equally refined
+baseline comparison, supported modified Pc, returned comparison trajectories, and
+frontend simulation controls are not verified/complete.
 
-- Explore, Close Approaches, Avoidance Planner, Cleanup Planner, and Data & Methods call real APIs; primary actions report errors and no control is intentionally inert.
-- Chromium E2E: 4 passed—catalog/globe shell, navigation and empty coverage, fresh maneuver optimization, and cleanup optimization.
+### Stage 7 — optimization: limited; incomplete
 
-## Stage 11 — reliability and performance: complete for offline coverage
+Browser runs a real 18-candidate historical computation, not a validation of its
+search/constraints. Default enumeration exhausts the budget at the first burn time.
+Sensitivity search, combined corrections, probability targets, cancellation/time
+budgets, and incremental progress are absent. Worker count is bounded; queued and
+stored jobs are not. No optimizer-specific correctness unit tests exist.
 
-- Backend: 19 passed, one third-party Starlette deprecation warning.
-- Frontend unit: 1 passed. Browser: 4 passed. Production build passed.
-- Optimizer, batch SGP4, SQLite restart behavior, stale/unavailable source states, and deterministic scientific regressions were exercised.
-- Full live-catalog benchmark is blocked by upstream access and is not claimed.
+### Stage 8 — screening: standalone function tested; integration incomplete
 
-## Stage 12 — deployment readiness: complete, not deployed
+Two synthetic straight-line cases exercise intersample crossing and a distant
+object. They do not establish conservative curved-orbit coverage. Optimizer never
+calls the function; results remain UNSCREENED. Internal “complete” status is not
+evidence of complete catalog/horizon safety screening.
 
-- Standard ASGI startup, Dockerfile, Vercel SPA config, environment examples, CORS/API URL, cache persistence, and refresh cadence are documented.
-- Added a concrete Modal deployment in `modal_app.py` with Python 3.12, two CPUs, 2 GiB RAM, a persistent `kessler-data` Volume, and a single backend container for the current in-memory job manager.
-- Installed the pinned Modal SDK (`requirements-modal.txt`, 1.6.1) and verified the deployment definition imports successfully without cloud calls.
-- Added persistence lifecycle/refresh tests: full backend suite now reports **21 passed**. Tests verify a failed Volume commit cannot be reported as a successful refresh.
-- Modal remote image build and hosted smoke checks remain unrun: this environment has no Modal token bindings or credential configuration. This implementation is being committed and published to GitHub at the user's request so it can be deployed from a clone.
-- Deployment was not authorized and no paid service was provisioned.
+### Stage 9 — decay/cleanup: selection core tested; scientific pipeline incomplete
 
-## Feature audit
+Synthetic cleanup tests cover budgets and a shared-edge non-double-counting case,
+not catalog-grounded ranking or priority sensitivity. UI supplies arbitrary effort,
+constant exposure/consequence, and unsupported persistence; GCAT is not joined.
+Decay tests exercise missing inputs and sensitivity of hardcoded bands, not
+scientific lifetime validation. Decay has no API/UI integration.
 
-### Implemented and tested
+### Stage 10 — frontend integration: incomplete
 
-- Typed API/OpenAPI, SQLite/cache foundation, OMM/SOCRATES/GCAT parsers, SGP4 and frame conversion, WebGL Earth, NASA-validated collision probability, dynamic J2 maneuvers, asynchronous optimizer, targeted screening algorithm, decay scenarios, cleanup optimizer, and all five frontend sections.
+Five sections render; four smoke flows pass. Avoidance ignores selected current
+encounters and always uses the first historical reference. Baseline/modified
+comparison, full controls, live progress, and comprehensive errors are absent.
+Filters affect list, not markers. Original flows A–E are not covered end to end.
+Visual source-status badges are clipped/mis-shaped.
 
-### Implemented but limited
+### Stage 11 — reliability/performance: limited measurements; incomplete
 
-- Globe/catalog: one archived real object because live GP is blocked.
-- Close approaches: complete path but no live SOCRATES rows in this environment.
-- Maneuver risk: nominal clearance only after intervention; fixed covariance is not presented as calibrated propagated risk.
-- Secondary screening: algorithm tested, but historical UI results remain unscreened by design.
-- Decay and cleanup: broad transparent proxies only.
+Checks above pass within stated scope. Previous SGP4 numbers duplicate one OMM and
+exercise a helper, not positions API or globe; benchmarks were not rerun here.
+Cache recovery, simultaneous requests, full-catalog performance, optimizer
+correctness/runtime limits, and the current-data end-to-end pipeline are unverified.
 
-### Unavailable or blocked
+### Stage 12 — deployment: prepared; hosted verification unavailable
 
-- Live CelesTrak/GCAT refresh and full-catalog counts (HTTP 403).
-- Operational covariance feeds, full covariance propagation, global all-pairs screening, precise reentry prediction, and real mission costs/vehicle availability.
-- Cloud deployment, because authorization and provider credentials were not supplied.
+Modal/Vercel configuration and instructions exist. Two local mocked-commit tests
+verify lifecycle/refresh ordering and failure reporting, not real Modal storage.
+Previous SDK import was local only. No remote image build/deployment/hosted smoke
+test performed; credentials are not configured here. Docker fixture layout has a
+known mismatch with PROJECT_ROOT, independent of credentials. Jobs are in memory.
+
+## Next executable task
+
+Repair catalog loading/coverage (repair-list item 2), then snapshots (item 3).
+Verify documented queries, parser fixtures, counts/categories, participant records,
+and honest offline/error behavior before calling ingestion complete. This
+documentation-only change does not start those repairs.

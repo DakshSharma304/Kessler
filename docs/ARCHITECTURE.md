@@ -1,17 +1,37 @@
 # Architecture
 
-Kessler is split into a FastAPI backend and a React/Vite frontend. The backend owns source retrieval, SQLite-backed caching, orbital mechanics, risk analysis, intervention optimization, and scientific provenance. The frontend owns interaction and visualization; visual interpolation is never used for scientific calculations.
+Kessler has a FastAPI backend and React/Vite frontend. Intended design: source
+ingestion/science in backend, visualization in frontend. Current implementation is
+partial: Cleanup constructs arbitrary proxy inputs in frontend, animation lacks
+interpolation, and current selection does not flow into Avoidance. See
+[the audit](IMPLEMENTATION_AUDIT.md).
 
-Canonical backend units are UTC, meters, meters per second, kilograms, radians, and unit-interval probability. Reference-frame conversions are explicit at module boundaries.
+SI-named fields and frames exist, but timezone, finite-value, provenance, and
+frame/unit validation are incomplete across contracts.
 
-## Processing paths
+## Existing modules and actual integration
 
-- `app.data`: rate-conscious source retrieval, checksum metadata, parsers, deduplication, and an indexed SQLite store. Both conjunction participants are indexed.
-- `app.orbital`: OMM initialization through `sgp4`, vectorized `SatrecArray` catalog propagation, and time-aware Astropy TEME→ITRS conversion.
-- `app.risk`: CCSDS CDM parsing, per-object RTN covariance rotation, inertial covariance combination under independence, encounter-plane projection, and numerical hard-body-disk integration.
-- `app.maneuvers`: backward/forward DOP853 propagation with Earth gravity + J2, RTN impulses, local closest-approach refinement, constraint evaluation, and nondominated selection.
-- `app.screening`: analytic minima across piecewise relative-trajectory segments so close passes between time samples are not missed by endpoint checks.
-- `app.decay` and `app.cleanup`: bounded persistence scenarios and deterministic, budgeted marginal-benefit selection with shared-edge deduplication.
-- `app.jobs`: bounded worker pool and observable optimization lifecycle.
+- app.data: parsers, TTL downloads, checksums, SQLite objects/encounters/status,
+  both-participant indexes. Cache writes precede validation, old rows accumulate,
+  and GCAT rows are not joined.
+- app.orbital: actual OMM/SGP4 and Astropy TEME→ITRS. SatrecArray is used by benchmark
+  helper, not the looping positions API. Frontend trajectory window is 90 minutes.
+- app.risk: per-object RTN rotation, independent covariance sum, encounter plane,
+  Gaussian disk integral for two NASA fixtures. Generic frames/units incomplete;
+  assumed-current Pc uses XY instead of encounter-plane calculation.
+- app.maneuvers: gravity+J2 DOP853, RTN impulse, modified minimum. Baseline is not
+  equivalently refined. Axis-candidate optimizer consumes default budget at first time.
+- app.screening: standalone straight-line segment minima, never called by optimizer;
+  no conservative curved-orbit error bounds.
+- app.decay: hardcoded lifetime bands without physical validation/API/UI integration.
+- app.cleanup: budgeted marginal-benefit/shared-edge math, synthetic-case tested.
+  Frontend inputs arbitrary, not a GCAT/persistence/exposure pipeline.
+- app.jobs: fixed worker count, in-memory jobs, unbounded queue/history, coarse
+  progress, no cancellation or computation timeout.
+- app.deployment: Modal commit middleware/lifecycle; tests use mock storage.
 
-The React app uses shared Zustand selection state, TanStack Query caching, lazy-loaded functional sections, and one GPU point buffer for catalog objects. The browser never calculates safety-critical geometry.
+Frontend uses Zustand selection, TanStack Query, lazy sections, GPU points.
+Selection survives navigation, but Avoidance ignores selectedEncounterId and chooses
+first NASA reference. Filters affect list only; client discards position identity/
+errors. Comparison trajectories are not integrated. Section-local time/controls
+are not globally shared.

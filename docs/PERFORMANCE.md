@@ -1,6 +1,6 @@
 # Performance
 
-Measured on the onboarding cloud machine (5 CPU cores, 33 GiB RAM), 2026-10-10 UTC.
+Previously recorded on the onboarding cloud machine (5 CPU cores, 33 GiB RAM), 2026-10-10 UTC. These benchmarks were not rerun for the documentation correction; current test/build timings are in [CHECKPOINTS.md](CHECKPOINTS.md).
 
 ## SGP4 batch throughput
 
@@ -20,4 +20,4 @@ Peak process resident set during that benchmark was 93,560 KiB.
 - Fresh 18-candidate maneuver optimization: 1.54 s wall time, 18 completed candidates, 3 nondominated solutions.
 - Four serial Chromium end-to-end flows, including maneuver and cleanup optimizations: 9.9 s.
 
-The optimizer target (<30 s) and 10,000-object propagation target for interactive use were met on this fixture benchmark. Full live-catalog memory and source-download benchmarks remain blocked by upstream HTTP 403 access.
+The historical 18-candidate run was below 30 s, but the default enumeration evaluates only the first burn time, not a complete time search. Batch-helper timings exclude API serialization, ITRS conversions, transfer, and browser rendering; the actual positions API does not use that helper. They do not establish interactive 10,000-object performance. Actual search, trajectory API, refined encounter, simultaneous-request, 100-candidate, cleanup, and full-catalog/browser benchmarks remain unverified. Live-source access was previously blocked by HTTP 403 in this cloud.
