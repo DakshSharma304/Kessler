@@ -15,11 +15,13 @@ test('refresh updates objects and header without a browser reload', async ({ pag
     await route.fulfill({ json: status() })
   })
   await page.route('**/api/objects?*', async route => {
-    if (!loaded) return route.continue()
-    await route.fulfill({ json: { items: objects, total: 2, limit: 1000, offset: 0, catalog_version: 'new' } })
+    await route.fulfill({ json: { items: loaded ? objects : objects.slice(0, 1), total: loaded ? 2 : 1, limit: 1000, offset: 0, catalog_version: loaded ? 'new' : 'old' } })
   })
   await page.route('**/api/health', route => route.fulfill({ json: { datasets: { objects: loaded ? 2 : 1 } } }))
-  await page.route('**/api/positions', route => route.fulfill({ json: [] }))
+  await page.route('**/api/visualization/window', route => route.fulfill({ json: {
+    timestamps: [0, 300000, 600000, 900000, 1200000].map(offset => new Date(Date.parse(route.request().postDataJSON().start) + offset).toISOString()),
+    tracks: [], errors: [], frame: 'ITRS', display_only: true, catalog_version: loaded ? 'new' : 'old', interpolation: 'Synthetic test',
+  } }))
   await page.route('**/api/trajectories', route => route.fulfill({ json: { states: [] } }))
   await page.goto('/')
   await expect(page.getByText('Archived fallback — live catalog not loaded')).toBeVisible()

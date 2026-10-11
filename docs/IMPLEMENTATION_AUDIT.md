@@ -1,5 +1,11 @@
 # Implementation audit
 
+Playback update (2026-10-11): display animation now uses GPU cubic-Hermite
+interpolation between buffered real SGP4/ITRS samples, with bounded prefetch and FPS
+monitoring/adaptive visual resolution. This supersedes the no-interpolation/stepwise
+display assessments below; scientific and partial-orbit gaps remain. See
+[INTERPOLATED_PLAYBACK.md](INTERPOLATED_PLAYBACK.md).
+
 ## Current update: catalog-loading repair
 
 Since the baseline audit below, automatic GP startup/refresh, safe validated GP

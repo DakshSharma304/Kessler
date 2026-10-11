@@ -1,5 +1,26 @@
 # Checkpoint log
 
+## GPU-interpolated playback — 2026-10-11 UTC
+
+- Display now uses buffered real SGP4/ITRS position/velocity samples and GPU cubic
+  Hermite interpolation; no backend request per animation frame. Prefetch is bounded
+  to current/next windows, errors/coverage holds are explicit, and the live renderer
+  reports FPS and reduces visual resolution on slow GPUs. Scientific calculation
+  APIs remain exact relative to their existing models, not display-interpolated.
+- Standalone 16,701-object software-WebGL check: 17.42 GPU updates/s average,
+  19 FPS displayed; individual slower frames remain. Two window requests across
+  startup/~24 seconds of playback, max one concurrent request, no page exceptions,
+  working Pause, screenshots opened and inspected. No new upstream download.
+- Real-catalog Hermite midpoint vs direct SGP4/ITRS check: all 16,701 objects,
+  mean 186.09 m/max 435.15 m interpolation error. Snapshot-specific display evidence,
+  not a scientific error bound. [Details](INTERPOLATED_PLAYBACK.md).
+- Both services must be updated/restarted (or Modal/frontend redeployed). No hosted
+  deployment or dependency change; other audited scientific/workflow gaps remain.
+- Checks: **39 backend tests passed** (2.76 s), **15 frontend unit tests passed**
+  (1.63 s runner duration), **8 browser tests passed** (22.5 s), final production
+  build passed (Vite 7.08 s). Existing warnings remain. Final visual check exercised
+  bounded/reused GL buffers across a window transition.
+
 ## Playback flashing repair — 2026-10-11 UTC
 
 - Keep completed same-catalog/filter positions and same-object orbit visible while

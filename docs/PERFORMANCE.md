@@ -1,5 +1,12 @@
 # Performance
 
+Current animation uses GPU Hermite interpolation and prefetched SGP4 windows,
+superseding the request-paced stepwise behavior below. A standalone software-WebGL
+check with all 16,701 objects averaged **17.42 GPU fractional updates/s**, with
+19 FPS displayed at completion, median frame gap 58 ms, and p95 97.9 ms.
+Adaptive DPR was 0.5. This meets a 15-FPS average target in that check, not a
+per-frame/hardware-independent guarantee. [Full evidence](INTERPOLATED_PLAYBACK.md).
+
 Playback update (2026-10-11): Explore now keeps the last completed snapshot visible
 while calculating, and waits for each step's requests before advancing again.
 It advances one simulation minute per completed step plus a one-second pause;

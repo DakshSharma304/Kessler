@@ -1,5 +1,8 @@
 # Playback flashing repair — 2026-10-11 UTC
 
+Historical stepwise repair: superseded by
+[GPU-interpolated playback](INTERPOLATED_PLAYBACK.md) later on 2026-10-11.
+
 ## Cause and behavior
 
 Explore previously changed the position/trajectory query key every second, then

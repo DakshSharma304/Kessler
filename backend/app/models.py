@@ -127,6 +127,35 @@ class PositionResult(BaseModel):
     errors: list[str] = Field(default_factory=list)
 
 
+class VisualizationWindowRequest(BaseModel):
+    object_ids: list[str] = Field(min_length=1, max_length=20_000)
+    start: datetime
+
+    @field_validator("start")
+    @classmethod
+    def aware_start(cls, value: datetime):
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("start must include a timezone")
+        return value
+
+
+class VisualizationTrack(BaseModel):
+    object_id: str
+    positions_m: list[tuple[float, float, float]] = Field(min_length=5, max_length=5)
+    velocities_m_s: list[tuple[float, float, float]] = Field(min_length=5, max_length=5)
+    metadata: ScienceMetadata
+
+
+class VisualizationWindow(BaseModel):
+    timestamps: list[datetime] = Field(min_length=5, max_length=5)
+    frame: Literal[Frame.ITRS] = Frame.ITRS
+    catalog_version: str
+    tracks: list[VisualizationTrack]
+    errors: list[str]
+    display_only: Literal[True] = True
+    interpolation: str = "Cubic Hermite between 300-second SGP4/ITRS samples; not for scientific calculations"
+
+
 class TrajectoryRequest(BaseModel):
     object_id: str
     start: datetime

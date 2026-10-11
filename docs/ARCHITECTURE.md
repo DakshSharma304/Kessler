@@ -1,5 +1,12 @@
 # Architecture
 
+Current playback update: `/api/visualization/window` returns compact, five-sample
+SGP4/ITRS tracks with provenance/errors. `useOrbitalPlayback` maintains current/next
+coverage, a frame-rate clock and cancellable prefetch. `EarthScene` uses GPU cubic
+Hermite interpolation and an FPS-based rendering-resolution reduction. Analysis
+does not consume the display buffers. The no-interpolation assessment below is
+historical. See [INTERPOLATED_PLAYBACK.md](INTERPOLATED_PLAYBACK.md).
+
 Current loading update: app.catalog coordinates background initial GP loading,
 status, and explicit refresh. GP payloads are validated before atomic cache
 promotion, then replace the SQLite snapshot. The positions API now calls batched

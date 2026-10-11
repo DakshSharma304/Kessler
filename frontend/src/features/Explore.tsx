@@ -1,17 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
-import { getObjects, getPositions, getTrajectory } from '../api/client'
+import { getObjects, getTrajectory } from '../api/client'
 import EarthScene from '../scene/EarthScene'
 import { useKesslerStore } from '../state/store'
 import CatalogLoading from './CatalogLoading'
+import { useOrbitalPlayback } from './useOrbitalPlayback'
 
 export default function Explore() {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('all')
-  const [time, setTime] = useState(new Date())
+  const [start, setStart] = useState(() => Date.now())
   const [playing, setPlaying] = useState(false)
   const [showOrbit, setShowOrbit] = useState(true)
   const [listLimit, setListLimit] = useState(100)
+  const [fps, setFps] = useState<number>()
   const objects = useQuery({ queryKey: ['objects'], queryFn: getObjects })
   const { selectedObjectId, setSelectedObject } = useKesslerStore()
   useEffect(() => {
@@ -24,40 +26,24 @@ export default function Explore() {
   ), [objects.data, search, category])
   const selected = objects.data?.items?.find(item => item.catalog_id === selectedObjectId)
   const visibleIds = useMemo(() => filtered.slice(0, 20_000).map(item => item.catalog_id), [filtered])
-  const positions = useQuery({
-    queryKey: ['positions', objects.data?.catalog_version, visibleIds, time.toISOString()],
-    queryFn: () => getPositions(visibleIds, time),
-    enabled: Boolean(visibleIds.length),
-    // Keep the last completed snapshot during time updates, not across catalog/filter changes.
-    placeholderData: (previous, previousQuery) => {
-      const previousIds = previousQuery?.queryKey[2] as string[] | undefined
-      return previousQuery?.queryKey[1] === objects.data?.catalog_version &&
-        previousIds?.length === visibleIds.length && previousIds.every((id, index) => id === visibleIds[index])
-        ? previous : undefined
-    },
-  })
+  const playback = useOrbitalPlayback(visibleIds, objects.data?.catalog_version, start, playing)
+  const time = new Date(playback.time)
+  // Refresh the selected orbit once per buffered window, not once per animation frame.
+  const orbitStart = playback.window?.times[0] ?? start
   const trajectory = useQuery({
-    queryKey: ['trajectory', selectedObjectId, objects.data?.catalog_version, time.toISOString()],
-    queryFn: () => getTrajectory(selectedObjectId!, time), enabled: Boolean(selectedObjectId && showOrbit),
+    queryKey: ['trajectory', selectedObjectId, objects.data?.catalog_version, orbitStart],
+    queryFn: () => getTrajectory(selectedObjectId!, new Date(orbitStart)), enabled: Boolean(selectedObjectId && showOrbit),
     placeholderData: (previous, previousQuery) => previousQuery?.queryKey[1] === selectedObjectId &&
       previousQuery?.queryKey[2] === objects.data?.catalog_version ? previous : undefined,
   })
-  useEffect(() => {
-    // Pace playback to completed requests; a slow backend must not accumulate requests
-    // for a new timestamp every second and leave the current snapshot perpetually pending.
-    if (!playing || !visibleIds.length || positions.isFetching || (showOrbit && trajectory.isFetching)) return
-    const timer = window.setTimeout(() => setTime(value => new Date(value.getTime() + 60_000)), 1_000)
-    return () => window.clearTimeout(timer)
-  }, [playing, visibleIds.length, positions.isFetching, trajectory.isFetching, showOrbit, time])
-  const displayedStates = visibleIds.length ? positions.data?.states ?? [] : []
   return (
     <section className="workspace explore-grid">
       <div className="globe-panel">
-        <EarthScene states={displayedStates} trajectory={showOrbit ? trajectory.data ?? [] : []} />
+        <EarthScene animation={playback.window} clock={playback.clock} trajectory={showOrbit ? trajectory.data ?? [] : []} onFps={setFps} />
         <div className="time-controls">
-          <button onClick={() => setPlaying(value => !value)}>{playing ? 'Pause' : 'Play'}</button>
+          <button onClick={() => { if (playing) playback.pause(); setPlaying(value => !value) }}>{playing ? 'Pause' : 'Play'}</button>
           <span>{time.toISOString().replace('.000', '')}</span>
-          <button onClick={() => setTime(new Date())}>Now</button>
+          <button onClick={() => setStart(Date.now())}>Now</button>
           <button onClick={() => setShowOrbit(value => !value)}>{showOrbit ? 'Hide orbit' : 'Show orbit'}</button>
         </div>
       </div>
@@ -71,10 +57,12 @@ export default function Explore() {
         </select>
         {objects.isError && <div className="notice error">Catalog unavailable: {objects.error.message}</div>}
         {objects.isPending && <div className="notice">Loading catalog pages…</div>}
-        <small className="fine-print" aria-label="Orbital position snapshot">Position snapshot: {displayedStates.length.toLocaleString()} objects{displayedStates[0] && ` · ${displayedStates[0].timestamp}`} · playback advances 1 minute per completed step</small>
-        {positions.isFetching && <div className="notice">Calculating orbital positions…</div>}
-        {positions.isError && <div className="notice error">Positions unavailable: {positions.error.message}</div>}
-        {Boolean(positions.data?.errors.length) && <div className="notice error">{positions.data!.errors.length} objects could not be propagated. {positions.data!.errors[0]}</div>}
+        <small className="fine-print" aria-label="Orbital position snapshot">Position snapshot: {(playback.window?.ids.length ?? 0).toLocaleString()} objects · {time.toISOString()} · GPU-interpolated display · 60× playback</small>
+        <small className="fine-print" aria-label="Animation frame rate">{fps === undefined ? 'Measuring render rate…' : `${Math.round(fps)} FPS · display interpolation only, not scientific states`}</small>
+        {playback.loading && <div className="notice">{playback.window ? 'Buffering the next animation window…' : 'Calculating orbital positions…'}</div>}
+        {playback.buffering && <div className="notice">Playback waiting for calculated coverage; dots stay visible.</div>}
+        {playback.error && <div className="notice error">Positions unavailable: {playback.error} · Press Now to retry.</div>}
+        {Boolean(playback.window?.errors.length) && <div className="notice error">{playback.window!.errors.length} propagation errors. {playback.window!.errors[0]}</div>}
         {filtered.length > 20_000 && <div className="notice">Rendering the first 20,000 of {filtered.length.toLocaleString()} matches. Narrow your search to see other objects.</div>}
         {objects.data && <small className="fine-print">{filtered.length.toLocaleString()} matches · {objects.data.items.length.toLocaleString()} catalog objects loaded</small>}
         <div className="object-list">

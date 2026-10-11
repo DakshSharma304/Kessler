@@ -1,5 +1,11 @@
 # Scientific limitations
 
+Playback now interpolates real SGP4/ITRS samples on the GPU for display only.
+300-second cubic-Hermite sample spacing and Float32 rendering introduce additional
+approximation. No collision/risk/maneuver result uses these interpolated markers.
+Accuracy checks are snapshot-specific, not scientific error bounds. See
+[INTERPOLATED_PLAYBACK.md](INTERPOLATED_PLAYBACK.md).
+
 Loading update: current GP fetching succeeded for 16,701 active-group objects;
 automatic loading/cache/UI pagination and batch API are repaired. The old one-object
 cloud condition below is baseline evidence, not the present catalog state. No new

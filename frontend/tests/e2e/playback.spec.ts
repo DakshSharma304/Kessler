@@ -15,19 +15,22 @@ async function mockPlayback(page: Page) {
   await page.route('**/api/objects?*', route => route.fulfill({ json: { items: objects, total: 2, limit: 1000, offset: 0, catalog_version: 'playback-test' } }))
   await page.route('**/api/health', route => route.fulfill({ json: { datasets: { objects: 2 } } }))
   await page.route('**/api/trajectories', route => route.fulfill({ json: { states: [] } }))
-  await page.route('**/api/positions', async route => {
+  await page.route('**/api/visualization/window', async route => {
     const body = route.request().postDataJSON()
     const requestNumber = ++tracking.requests
     tracking.inFlight++
     tracking.maxInFlight = Math.max(tracking.maxInFlight, tracking.inFlight)
     if (requestNumber > 1) await new Promise(resolve => setTimeout(resolve, 1800))
-    await route.fulfill({ json: body.object_ids.map((id: string, index: number) => ({
-      object_id: id, errors: [], states: [{
-        timestamp: body.timestamps[0], frame: 'ITRS',
-        position_m: [7_000_000 + index * 500_000, -4_000_000, requestNumber * 500_000], velocity_m_s: [0, 7500, 0],
+    const timestamps = [0, 300, 600, 900, 1200].map(seconds => new Date(Date.parse(body.start) + seconds * 1000).toISOString())
+    await route.fulfill({ json: {
+      timestamps, frame: 'ITRS', catalog_version: 'playback-test', display_only: true, interpolation: 'Synthetic test', errors: [],
+      tracks: body.object_ids.map((id: string, index: number) => ({
+        object_id: id,
+        positions_m: timestamps.map((_: string, sample: number) => [7_000_000 + index * 500_000, -4_000_000, requestNumber * 500_000 + sample * 300_000]),
+        velocities_m_s: timestamps.map(() => [0, 0, 1000]),
         metadata: { source: 'Synthetic test', model: 'UI regression', model_version: '1', availability: 'available', assumptions: [], warnings: [] },
-      }],
-    })) })
+      })),
+    } })
     tracking.inFlight--
     tracking.completed++
   })
@@ -36,7 +39,8 @@ async function mockPlayback(page: Page) {
   return tracking
 }
 
-test('slow playback retains dots, completes updates and does not overlap requests', async ({ page }) => {
+test('GPU playback moves between requests, retains dots while prefetching and pauses', async ({ page }) => {
+  test.setTimeout(45_000)
   const tracking = await mockPlayback(page)
   const snapshot = page.getByLabel('Orbital position snapshot')
   const initial = await snapshot.textContent()
@@ -47,11 +51,15 @@ test('slow playback retains dots, completes updates and does not overlap request
     new MutationObserver(() => observations.push(target.textContent ?? '')).observe(target, { childList: true, subtree: true, characterData: true })
   })
   await page.getByRole('button', { name: 'Play', exact: true }).click()
-  await expect(page.getByText('Calculating orbital positions…')).toBeVisible()
-  await expect(snapshot).toHaveText(initial!)
-  await expect.poll(() => tracking.completed).toBeGreaterThanOrEqual(3)
+  await expect(snapshot).not.toHaveText(initial!)
+  // Smooth time updates happen inside one fetched window, not one POST per step.
+  expect(tracking.requests).toBe(1)
+  await expect(page.getByText('Buffering the next animation window…')).toBeVisible({ timeout: 20_000 })
+  await expect(snapshot).toContainText('2 objects')
+  await expect.poll(() => tracking.completed).toBeGreaterThanOrEqual(2)
   await expect(snapshot).not.toHaveText(initial!)
   await page.getByRole('button', { name: 'Pause', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible()
   await expect.poll(() => tracking.inFlight).toBe(0)
   expect(tracking.maxInFlight).toBe(1)
   expect(await page.evaluate(() => (window as unknown as { playbackSnapshots: string[] }).playbackSnapshots.every(value => value.includes('2 objects')))).toBe(true)
@@ -60,6 +68,7 @@ test('slow playback retains dots, completes updates and does not overlap request
   await page.waitForTimeout(1300)
   expect(tracking.requests).toBe(requestsAtPause)
   await expect(snapshot).toHaveText(completedSnapshot!)
+  await expect(page.getByLabel('Animation frame rate')).toContainText('FPS')
 })
 
 test('changing filters does not retain excluded dots and Now requests the exact timestamp', async ({ page }) => {

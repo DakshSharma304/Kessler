@@ -22,7 +22,7 @@ from app.models import (
     Availability, CatalogLoadingStatus, CleanupOptimizeRequest, DatasetStatus, EncounterAnalysis,
     EncounterAnalyzeRequest, Frame, ManeuverOptimizeRequest,
     ManeuverSimulationRequest, PositionRequest, PositionResult, ScienceMetadata,
-    TrajectoryRequest,
+    TrajectoryRequest, VisualizationWindowRequest, VisualizationWindow, VisualizationTrack,
 )
 from app.orbital import propagate_object, propagate_objects
 from app.risk import calculate_cdm_probability, parse_cdm
@@ -192,6 +192,31 @@ async def positions(request: PositionRequest) -> list[PositionResult]:
     results = await asyncio.to_thread(propagate_objects, list(loaded.values()), request.timestamps, request.frame)
     by_id = {item.object_id: item for item in results}
     return [by_id.get(object_id, PositionResult(object_id=object_id, states=[], errors=["Object unavailable in loaded catalog coverage"])) for object_id in request.object_ids]
+
+
+@app.post("/api/visualization/window", response_model=VisualizationWindow, tags=["orbital"])
+async def visualization_window(request: VisualizationWindowRequest) -> VisualizationWindow:
+    # Five samples bound work to the existing 100,000-state API limit. This compact
+    # response avoids repeating per-state metadata five times for the browser.
+    version = catalog_loader.status().catalog_version
+    timestamps = [request.start + timedelta(seconds=300 * index) for index in range(5)]
+    results = await positions(PositionRequest(object_ids=request.object_ids, timestamps=timestamps, frame=Frame.ITRS))
+    if catalog_loader.status().catalog_version != version:
+        raise HTTPException(409, "Catalog changed while computing animation window; reload the snapshot")
+    tracks, errors = [], []
+    for result in results:
+        errors.extend(f"{result.object_id}: {error}" for error in result.errors)
+        if len(result.states) != len(timestamps):
+            if not result.errors:
+                errors.append(f"{result.object_id}: Incomplete animation samples; object omitted")
+            continue
+        tracks.append(VisualizationTrack(
+            object_id=result.object_id,
+            positions_m=[state.position_m for state in result.states],
+            velocities_m_s=[state.velocity_m_s for state in result.states],
+            metadata=result.states[0].metadata,
+        ))
+    return VisualizationWindow(timestamps=timestamps, catalog_version=version, tracks=tracks, errors=errors)
 
 
 @app.post("/api/trajectories", tags=["orbital"])

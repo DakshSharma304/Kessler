@@ -15,6 +15,17 @@ export type OrbitalObject = {
   elements: { epoch: string; inclination_rad: number; eccentricity: number; mean_motion_rev_day: number }
 }
 
+export type VisualizationWindow = {
+  timestamps: string[]; frame: 'ITRS'; catalog_version: string; display_only: true; interpolation: string
+  tracks: Array<{ object_id: string; positions_m: Array<[number, number, number]>; velocities_m_s: Array<[number, number, number]>; metadata: ScienceMetadata }>
+  errors: string[]
+}
+
+export const getVisualizationWindow = (ids: string[], start: number, signal?: AbortSignal) =>
+  api<VisualizationWindow>('/api/visualization/window', {
+    method: 'POST', signal, body: JSON.stringify({ object_ids: ids, start: new Date(start).toISOString() }),
+  })
+
 export type Conjunction = {
   encounter_id: string; catalog_id_1: string; catalog_id_2: string
   object_name_1: string; object_name_2: string; tca: string
