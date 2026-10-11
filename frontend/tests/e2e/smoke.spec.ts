@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 test('application shell connects to backend', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByText('KESSLER')).toBeVisible()
-  await expect(page.getByText('1 OBJECTS')).toBeVisible()
+  await expect(page.getByText('1 OBJECTS', { exact: true })).toBeVisible()
   await expect(page.getByText('VANGUARD 1').first()).toBeVisible()
   await expect(page.getByText('ARCHIVED DATA')).toBeVisible()
 })

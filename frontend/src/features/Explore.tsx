@@ -18,11 +18,6 @@ export default function Explore() {
     if (objects.data?.items.length && !objects.data.items.some(item => item.catalog_id === selectedObjectId)) setSelectedObject(objects.data.items[0].catalog_id)
   }, [objects.data, selectedObjectId, setSelectedObject])
   useEffect(() => setListLimit(100), [search, category])
-  useEffect(() => {
-    if (!playing) return
-    const timer = window.setInterval(() => setTime(value => new Date(value.getTime() + 60_000)), 1_000)
-    return () => window.clearInterval(timer)
-  }, [playing])
   const filtered = useMemo(() => (objects.data?.items ?? []).filter(item =>
     (category === 'all' || item.category === category) &&
     (item.name.toLowerCase().includes(search.toLowerCase()) || item.catalog_id.includes(search)),
@@ -30,18 +25,35 @@ export default function Explore() {
   const selected = objects.data?.items?.find(item => item.catalog_id === selectedObjectId)
   const visibleIds = useMemo(() => filtered.slice(0, 20_000).map(item => item.catalog_id), [filtered])
   const positions = useQuery({
-    queryKey: ['positions', objects.data?.catalog_version, visibleIds, time.toISOString().slice(0, 16)],
+    queryKey: ['positions', objects.data?.catalog_version, visibleIds, time.toISOString()],
     queryFn: () => getPositions(visibleIds, time),
     enabled: Boolean(visibleIds.length),
+    // Keep the last completed snapshot during time updates, not across catalog/filter changes.
+    placeholderData: (previous, previousQuery) => {
+      const previousIds = previousQuery?.queryKey[2] as string[] | undefined
+      return previousQuery?.queryKey[1] === objects.data?.catalog_version &&
+        previousIds?.length === visibleIds.length && previousIds.every((id, index) => id === visibleIds[index])
+        ? previous : undefined
+    },
   })
   const trajectory = useQuery({
-    queryKey: ['trajectory', selectedObjectId, time.toISOString().slice(0, 16)],
+    queryKey: ['trajectory', selectedObjectId, objects.data?.catalog_version, time.toISOString()],
     queryFn: () => getTrajectory(selectedObjectId!, time), enabled: Boolean(selectedObjectId && showOrbit),
+    placeholderData: (previous, previousQuery) => previousQuery?.queryKey[1] === selectedObjectId &&
+      previousQuery?.queryKey[2] === objects.data?.catalog_version ? previous : undefined,
   })
+  useEffect(() => {
+    // Pace playback to completed requests; a slow backend must not accumulate requests
+    // for a new timestamp every second and leave the current snapshot perpetually pending.
+    if (!playing || !visibleIds.length || positions.isFetching || (showOrbit && trajectory.isFetching)) return
+    const timer = window.setTimeout(() => setTime(value => new Date(value.getTime() + 60_000)), 1_000)
+    return () => window.clearTimeout(timer)
+  }, [playing, visibleIds.length, positions.isFetching, trajectory.isFetching, showOrbit, time])
+  const displayedStates = visibleIds.length ? positions.data?.states ?? [] : []
   return (
     <section className="workspace explore-grid">
       <div className="globe-panel">
-        <EarthScene states={visibleIds.length ? positions.data?.states ?? [] : []} trajectory={showOrbit ? trajectory.data ?? [] : []} />
+        <EarthScene states={displayedStates} trajectory={showOrbit ? trajectory.data ?? [] : []} />
         <div className="time-controls">
           <button onClick={() => setPlaying(value => !value)}>{playing ? 'Pause' : 'Play'}</button>
           <span>{time.toISOString().replace('.000', '')}</span>
@@ -59,6 +71,7 @@ export default function Explore() {
         </select>
         {objects.isError && <div className="notice error">Catalog unavailable: {objects.error.message}</div>}
         {objects.isPending && <div className="notice">Loading catalog pages…</div>}
+        <small className="fine-print" aria-label="Orbital position snapshot">Position snapshot: {displayedStates.length.toLocaleString()} objects{displayedStates[0] && ` · ${displayedStates[0].timestamp}`} · playback advances 1 minute per completed step</small>
         {positions.isFetching && <div className="notice">Calculating orbital positions…</div>}
         {positions.isError && <div className="notice error">Positions unavailable: {positions.error.message}</div>}
         {Boolean(positions.data?.errors.length) && <div className="notice error">{positions.data!.errors.length} objects could not be propagated. {positions.data!.errors[0]}</div>}

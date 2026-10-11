@@ -1,5 +1,19 @@
 # Checkpoint log
 
+## Playback flashing repair — 2026-10-11 UTC
+
+- Keep completed same-catalog/filter positions and same-object orbit visible while
+  fetching the next timestamp; pace playback to completed requests rather than
+  accumulating timestamp queries every second. Exact-time keys repair Now within
+  the same minute. A visible snapshot timestamp distinguishes displayed from
+  requested time. Playback remains stepwise, not smooth or fixed wall-clock speed.
+- Slow-response browser regressions and separate real 16,701-object visual checks:
+  [PLAYBACK_REPAIR.md](PLAYBACK_REPAIR.md). No backend/dependency changes, no new
+  upstream catalog download, and no hosted deployment.
+- Final checks: **8 browser tests passed** (23.5 s), **5 frontend unit tests passed**
+  (1.29 s runner duration), production build passed (Vite 4.48 s). Existing warnings
+  remain; no backend retest for this frontend-only change.
+
 ## Catalog-loading repair — 2026-10-10 UTC (after the audit below)
 
 - Automatic background GP loading, coordinated refresh/status endpoints, policy-aware

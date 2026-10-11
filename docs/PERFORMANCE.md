@@ -1,5 +1,12 @@
 # Performance
 
+Playback update (2026-10-11): Explore now keeps the last completed snapshot visible
+while calculating, and waits for each step's requests before advancing again.
+It advances one simulation minute per completed step plus a one-second pause;
+slow backends reduce playback speed rather than piling up timestamp requests.
+This fixes flashing, not smooth interpolation, constant 60× speed, or catalog FPS.
+See [PLAYBACK_REPAIR.md](PLAYBACK_REPAIR.md).
+
 ## Real loaded-catalog API check — 2026-10-10 UTC
 
 One warm, local HTTP run against the real active-group snapshot (16,701 objects):
