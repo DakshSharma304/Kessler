@@ -44,9 +44,10 @@ try {
   await page.goto(process.env.KESSLER_VERIFY_URL ?? 'http://127.0.0.1:5173')
   const snapshot = page.getByLabel('Orbital position snapshot')
   await snapshot.filter({ hasText: /Position snapshot: [1-9]/ }).waitFor({ timeout: 90_000 })
+  await page.locator('.time-controls').scrollIntoViewIfNeeded()
   // Allow adaptive rendering resolution to settle before measuring.
   await page.waitForTimeout(5000)
-  await page.getByRole('button', { name: 'Play', exact: true }).click()
+  const manualControls = await page.getByRole('button', { name: /^(Play|Pause|Freeze time)$/i }).count()
   await page.evaluate(() => { window.gpuInterpolation = [] })
   await page.waitForTimeout(4000)
   await page.screenshot({ path: resolve(output, 'playing.png') })
@@ -57,15 +58,9 @@ try {
   const during = await snapshot.textContent()
   const fpsLabel = await page.getByLabel('Animation frame rate').textContent()
   const samples = await page.evaluate(() => window.gpuInterpolation)
-  await page.getByRole('button', { name: 'Pause', exact: true }).click()
-  await page.getByRole('button', { name: 'Play', exact: true }).waitFor()
-  await page.waitForTimeout(500)
-  const paused = await snapshot.textContent()
-  await page.waitForTimeout(1200)
-  const pausedStable = paused === await snapshot.textContent()
   const differences = samples.slice(1).map((item, index) => item.at - samples[index].at).filter(value => value > 0).sort((a, b) => a - b)
   const metrics = {
-    before, during, pausedStable, fpsLabel, requests, maxPending,
+    before, during, manualControls, autoplayAdvanced: before !== during, fpsLabel, requests, maxPending,
     shaderUpdates: samples.length,
     shaderFps: samples.length > 1 ? (samples.length - 1) * 1000 / (samples.at(-1).at - samples[0].at) : 0,
     medianFrameMs: differences[Math.floor(differences.length * .5)],
@@ -74,7 +69,7 @@ try {
     canvas: await page.locator('canvas').evaluate(canvas => ({ width: canvas.width, height: canvas.height })), failures,
   }
   console.log(JSON.stringify(metrics, null, 2))
-  if (!pausedStable || failures.length || metrics.uniqueFractions < 15 || maxPending > 1) process.exitCode = 1
+  if (manualControls || before === during || failures.length || metrics.uniqueFractions < 15 || maxPending > 1) process.exitCode = 1
 } finally {
   await browser.close()
 }

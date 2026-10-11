@@ -10,7 +10,6 @@ export default function Explore() {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('all')
   const [start, setStart] = useState(() => Date.now())
-  const [playing, setPlaying] = useState(false)
   const [showOrbit, setShowOrbit] = useState(true)
   const [listLimit, setListLimit] = useState(100)
   const [fps, setFps] = useState<number>()
@@ -26,7 +25,7 @@ export default function Explore() {
   ), [objects.data, search, category])
   const selected = objects.data?.items?.find(item => item.catalog_id === selectedObjectId)
   const visibleIds = useMemo(() => filtered.slice(0, 20_000).map(item => item.catalog_id), [filtered])
-  const playback = useOrbitalPlayback(visibleIds, objects.data?.catalog_version, start, playing)
+  const playback = useOrbitalPlayback(visibleIds, objects.data?.catalog_version, start)
   const time = new Date(playback.time)
   // Refresh the selected orbit once per buffered window, not once per animation frame.
   const orbitStart = playback.window?.times[0] ?? start
@@ -41,7 +40,6 @@ export default function Explore() {
       <div className="globe-panel">
         <EarthScene animation={playback.window} clock={playback.clock} trajectory={showOrbit ? trajectory.data ?? [] : []} onFps={setFps} />
         <div className="time-controls">
-          <button onClick={() => { if (playing) playback.pause(); setPlaying(value => !value) }}>{playing ? 'Pause' : 'Play'}</button>
           <span>{time.toISOString().replace('.000', '')}</span>
           <button onClick={() => setStart(Date.now())}>Now</button>
           <button onClick={() => setShowOrbit(value => !value)}>{showOrbit ? 'Hide orbit' : 'Show orbit'}</button>

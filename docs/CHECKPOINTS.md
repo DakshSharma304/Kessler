@@ -1,5 +1,20 @@
 # Checkpoint log
 
+## Automatic playback — 2026-10-10 EDT
+
+- Removed Play/Pause entirely, including the playing flag and pause handler.
+  Explore begins 60× GPU-interpolated playback as soon as its animation samples
+  arrive. Now/orbit toggle and coverage/error holds remain; no hidden Freeze control.
+- 15 frontend unit tests passed (1.73 s runner duration), 8 browser tests passed
+  (24.2 s), and production build passed (Vite 4.57 s), with existing warnings.
+  Frontend-only change; no backend retest or dependency changes.
+- Real 16,701-object browser check without playback clicks: no manual controls,
+  advancing time and 418 distinct GPU updates, 16.83 updates/s average, 18 FPS at
+  completion, bounded prefetch (max one request), no page exceptions. Two images
+  opened and visually inspected: moving/retained dots and no Play/Pause button.
+  [Evidence](INTERPOLATED_PLAYBACK.md#autoplay-verification--2026-10-10-edt).
+  No new upstream download or hosted deployment.
+
 ## GPU-interpolated playback — 2026-10-11 UTC
 
 - Display now uses buffered real SGP4/ITRS position/velocity samples and GPU cubic

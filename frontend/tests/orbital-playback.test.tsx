@@ -28,25 +28,25 @@ function frameDriver() {
   })
 }
 
-test('clock advances at render cadence without fetching every frame, then pauses', async () => {
+test('clock starts automatically without fetching every frame, and stops on unmount', async () => {
   const step = frameDriver(), ids = ['1'], start = Date.parse('2026-10-11T00:00:00Z')
   fetchWindow.mockResolvedValue(fixture(start))
-  const { result, rerender } = renderHook(({ playing }) => useOrbitalPlayback(ids, 'test', start, playing), { initialProps: { playing: true } })
+  const { result, unmount } = renderHook(() => useOrbitalPlayback(ids, 'test', start))
   await waitFor(() => expect(result.current.window).toBeDefined())
   step(101)
   expect(result.current.clock.current - start).toBeCloseTo(120_000)
   expect(fetchWindow).toHaveBeenCalledTimes(1)
-  rerender({ playing: false })
-  const paused = result.current.clock.current
+  unmount()
+  const stopped = result.current.clock.current
   step(100)
-  expect(result.current.clock.current).toBe(paused)
+  expect(result.current.clock.current).toBe(stopped)
 })
 
 test('prefetches once, keeps moving during delay, holds at the boundary and resumes only inside coverage', async () => {
   const step = frameDriver(), ids = ['1'], start = Date.parse('2026-10-11T00:00:00Z')
   let resolveNext!: (data: VisualizationWindow) => void
   fetchWindow.mockResolvedValueOnce(fixture(start)).mockImplementationOnce(() => new Promise(resolve => { resolveNext = resolve }))
-  const { result } = renderHook(() => useOrbitalPlayback(ids, 'test', start, true))
+  const { result } = renderHook(() => useOrbitalPlayback(ids, 'test', start))
   await waitFor(() => expect(result.current.window).toBeDefined())
   step(601)
   expect(fetchWindow).toHaveBeenCalledTimes(2)
@@ -66,7 +66,7 @@ test('prefetches once, keeps moving during delay, holds at the boundary and resu
 test('filter changes preserve time, discard old context, and abort stale fetches; Now resets time', async () => {
   const step = frameDriver(), firstIds = ['1'], nextIds = ['2'], start = Date.parse('2026-10-11T00:00:00Z')
   fetchWindow.mockImplementation(async (_, at) => fixture(at))
-  const { result, rerender } = renderHook(({ ids, at }) => useOrbitalPlayback(ids, 'test', at, true), { initialProps: { ids: firstIds, at: start } })
+  const { result, rerender } = renderHook(({ ids, at }) => useOrbitalPlayback(ids, 'test', at), { initialProps: { ids: firstIds, at: start } })
   await waitFor(() => expect(result.current.window).toBeDefined())
   step(51)
   const advanced = result.current.clock.current
@@ -83,7 +83,7 @@ test('filter changes preserve time, discard old context, and abort stale fetches
 test('a failed prefetch is reported without retries or extrapolation', async () => {
   const step = frameDriver(), ids = ['1'], start = Date.parse('2026-10-11T00:00:00Z')
   fetchWindow.mockResolvedValueOnce(fixture(start)).mockRejectedValueOnce(new Error('Network test failure'))
-  const { result } = renderHook(() => useOrbitalPlayback(ids, 'test', start, true))
+  const { result } = renderHook(() => useOrbitalPlayback(ids, 'test', start))
   await waitFor(() => expect(result.current.window).toBeDefined())
   step(601)
   await waitFor(() => expect(result.current.error).toBe('Network test failure'))
@@ -99,7 +99,7 @@ test('an aborted response cannot restore dots from a previous filter', async () 
   let resolveOld!: (data: VisualizationWindow) => void
   fetchWindow.mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve }))
     .mockResolvedValueOnce(fixture(start))
-  const { result, rerender } = renderHook(({ ids }) => useOrbitalPlayback(ids, 'test', start, false), { initialProps: { ids: ['old'] } })
+  const { result, rerender } = renderHook(({ ids }) => useOrbitalPlayback(ids, 'test', start), { initialProps: { ids: ['old'] } })
   rerender({ ids: ['new'] })
   await waitFor(() => expect(result.current.window).toBeDefined())
   const current = result.current.window

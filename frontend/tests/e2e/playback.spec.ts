@@ -39,7 +39,7 @@ async function mockPlayback(page: Page) {
   return tracking
 }
 
-test('GPU playback moves between requests, retains dots while prefetching and pauses', async ({ page }) => {
+test('GPU playback starts automatically without controls and retains dots while prefetching', async ({ page }) => {
   test.setTimeout(45_000)
   const tracking = await mockPlayback(page)
   const snapshot = page.getByLabel('Orbital position snapshot')
@@ -50,7 +50,7 @@ test('GPU playback moves between requests, retains dots while prefetching and pa
     Object.assign(window, { playbackSnapshots: observations })
     new MutationObserver(() => observations.push(target.textContent ?? '')).observe(target, { childList: true, subtree: true, characterData: true })
   })
-  await page.getByRole('button', { name: 'Play', exact: true }).click()
+  await expect(page.getByRole('button', { name: /^(Play|Pause|Freeze time)$/i })).toHaveCount(0)
   await expect(snapshot).not.toHaveText(initial!)
   // Smooth time updates happen inside one fetched window, not one POST per step.
   expect(tracking.requests).toBe(1)
@@ -58,16 +58,12 @@ test('GPU playback moves between requests, retains dots while prefetching and pa
   await expect(snapshot).toContainText('2 objects')
   await expect.poll(() => tracking.completed).toBeGreaterThanOrEqual(2)
   await expect(snapshot).not.toHaveText(initial!)
-  await page.getByRole('button', { name: 'Pause', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible()
   await expect.poll(() => tracking.inFlight).toBe(0)
   expect(tracking.maxInFlight).toBe(1)
   expect(await page.evaluate(() => (window as unknown as { playbackSnapshots: string[] }).playbackSnapshots.every(value => value.includes('2 objects')))).toBe(true)
   const completedSnapshot = await snapshot.textContent()
-  const requestsAtPause = tracking.requests
   await page.waitForTimeout(1300)
-  expect(tracking.requests).toBe(requestsAtPause)
-  await expect(snapshot).toHaveText(completedSnapshot!)
+  await expect(snapshot).not.toHaveText(completedSnapshot!)
   await expect(page.getByLabel('Animation frame rate')).toContainText('FPS')
 })
 

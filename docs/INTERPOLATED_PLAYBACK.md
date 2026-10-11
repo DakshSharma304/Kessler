@@ -3,6 +3,11 @@
 This supersedes the stepwise playback repair in [PLAYBACK_REPAIR.md](PLAYBACK_REPAIR.md).
 It changes display animation, not the scientific analysis algorithms.
 
+Autoplay update (2026-10-10 EDT): Explore now starts automatically once its first
+animation window is ready. Play/Pause, the manual playing flag and the pause handler
+are removed entirely, with no hidden Freeze-time control. Now and the orbit toggle
+remain. Coverage/error holds are still required to avoid invalid extrapolation.
+
 ## Implementation
 
 - `POST /api/visualization/window` returns five real SGP4/ITRS position/velocity
@@ -25,7 +30,7 @@ It changes display animation, not the scientific analysis algorithms.
   for the current view; current + next windows bound stored animation data. Playback
   continues during prefetch. At a coverage boundary it holds the final valid positions
   until the next window arrives; it never extrapolates beyond calculated coverage.
-- Pause stops the clock; Now resets it and fetches new coverage. Catalog/filter
+- Playback starts automatically; Now resets it and fetches new coverage. Catalog/filter
   changes discard obsolete tracks and abort their client requests while preserving
   the current time. Failed fetches show an error, stop retries, and can be retried
   with Now. Long background-tab frame gaps are discarded, not treated as an instruction
@@ -57,7 +62,7 @@ SGP4 truth accuracy, or covariance guarantees. They exclude additional Float32 G
 rounding. The four-object real OMM unit fixture also checks three interior fractions
 against SGP4 with a fixture-specific 5 km ceiling.
 
-## Visual/performance evidence
+## Original visual/performance evidence (before the autoplay update)
 
 The standalone cloud check used Chromium, software WebGL (SwiftShader), a 1440×1000
 viewport, the actual cached 16,701-object catalog, and real window API responses.
@@ -87,6 +92,25 @@ build passed (Vite 7.08 s). The last full-catalog visual check also exercised th
 reusable GL buffers across a window transition. Existing Astropy cache/AnyIO and
 runner-color warnings and the >500 kB Explore chunk warning remain.
 
+## Autoplay verification — 2026-10-10 EDT
+
+- 15 frontend unit tests passed (1.73 s runner duration), 8 browser tests passed
+  (24.2 s), and TypeScript/production build passed (Vite 4.57 s). The former Pause
+  regression now checks that motion begins without clicks, no Play/Pause/Freeze
+  button exists, prefetch retains dots, and playback continues. Hook tests verify
+  automatic clock advancement and cleanup on unmount, as well as the existing
+  coverage, errors, filtering and Now safeguards. No backend files changed or retest.
+- Separate real-catalog browser run: 16,701 tracks, zero manual controls, advancing
+  time without playback clicks, 418 distinct GPU fractional updates at 16.83/s
+  average, 18 FPS displayed at completion. Three window requests across startup
+  and continuous playback, maximum one concurrent request, no page exceptions.
+  As before, software-WebGL FPS is a measured average, not a minimum guarantee.
+- [Automatic playback](audit/autoplay/playing.png) and
+  [continued playback during prefetch](audit/autoplay/advanced.png) screenshots
+  were opened and visually inspected. Dots changed position and remained visible;
+  time controls contain only the clock, Now, and the orbit toggle. No new upstream
+  download, dependency change, or hosted deployment.
+
 Reproduce against a running app from `frontend`:
 
 ```bash
@@ -94,17 +118,18 @@ KESSLER_VERIFY_URL=http://127.0.0.1:5173 PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin
 ```
 
 The executable override is optional if Playwright's Chromium is installed. This
-script measures/logs FPS; it fails on page exceptions, nonmoving shader fractions,
-unstable Pause, or overlapping requests, not on platform-specific FPS variation.
+script now checks autoplay with no manual interaction and measures/logs FPS; it
+fails on remaining manual playback controls, nonadvancing time, page exceptions,
+nonmoving shader fractions, or overlapping requests, not platform-specific FPS variation.
 
 ## Exact local test
 
 1. Pull main, restart both backend and frontend, and reload Explore. If using Modal,
    deploy the updated backend and frontend first.
-2. Wait for a nonzero Position snapshot, then press Play. Dots should move smoothly
+2. Wait for a nonzero Position snapshot. Dots should start moving automatically
    between requests. Read the FPS value; target at least 15 on your machine.
 3. Leave it playing at least 30 seconds to cross the first 20-minute simulation
    window. Prefetch should not clear the dots. A slow server can cause a labeled
    hold at the boundary, not a blank globe or invented extrapolation.
-4. Pause; the clock/dots should stop. Press Now and test search/category changes;
+4. Confirm there is no Play/Pause control. Press Now and test search/category changes;
    excluded dots must not linger as if they were matching objects.

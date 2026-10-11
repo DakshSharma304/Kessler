@@ -4,11 +4,9 @@ import { prepareAnimationWindow, type AnimationWindow } from '../scene/interpola
 
 export const PLAYBACK_RATE = 60
 
-export function useOrbitalPlayback(ids: string[], catalogVersion: string | undefined, start: number, playing: boolean) {
+export function useOrbitalPlayback(ids: string[], catalogVersion: string | undefined, start: number) {
   const clock = useRef(start)
   const lastStart = useRef(start)
-  const playingRef = useRef(playing)
-  playingRef.current = playing
   const [window, setWindow] = useState<AnimationWindow>()
   const [time, setTime] = useState(start)
   const [loading, setLoading] = useState(false)
@@ -46,7 +44,7 @@ export function useOrbitalPlayback(ids: string[], catalogVersion: string | undef
       const elapsed = previous ? Math.min((now - previous) / 1000, .25) : 0
       previous = now
       let waiting = false
-      if (playingRef.current && active) {
+      if (active) {
         const end = active.times[active.times.length - 1]
         const requested = clock.current + elapsed * PLAYBACK_RATE * 1000
         clock.current = Math.min(requested, end)
@@ -73,13 +71,5 @@ export function useOrbitalPlayback(ids: string[], catalogVersion: string | undef
     return () => { controller.abort(); globalThis.cancelAnimationFrame(frame) }
   }, [ids, catalogVersion, start])
 
-  useEffect(() => { if (!playing) setTime(clock.current) }, [playing])
-  const pause = () => {
-    // Stop immediately in the click handler and commit the exact frozen clock in
-    // the same React update as the button, rather than a later effect/text tick.
-    playingRef.current = false
-    setTime(clock.current)
-    setBuffering(false)
-  }
-  return { clock, window, time, loading, buffering, error, pause }
+  return { clock, window, time, loading, buffering, error }
 }
